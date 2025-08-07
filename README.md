@@ -8,10 +8,10 @@ Akameribot es un bot especializado en mejorar la experiencia de roleplay escrito
 
 ## ✨ Características principales
 
-- **Sistema de diálogos avanzado**: Formatea automáticamente los diálogos de personajes
 - **Gestión de fichas**: Crea y mantiene fichas de personaje directamente en Discord
 - **Gestion de comandos personalizados:** Permite la creación de comandos moldeables
 - **Sistema de Inventario:** Sistema general para simular el contenido de objetos y su almacenamiento
+- **Más por añadir...**
 
 ### Requisitos previos
 - Python 3.8 o superior
