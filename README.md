@@ -1,5 +1,5 @@
 # 🎭 Akameribot - Tu compañero de Roleplay 
-
+ 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python&logoColor=white)](https://python.org)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.0%2B-blueviolet?logo=discord)](https://discordpy.readthedocs.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
