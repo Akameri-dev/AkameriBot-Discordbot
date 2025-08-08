@@ -18,9 +18,13 @@ bot = commands.Bot(command_prefix='.', intents = intents)
 
 
 
+@bot.command()
+async def Help(ctx):
+    await ctx.send("Nada de help, chambea a la verga")
+
 
 async def load_cogs():
-    await bot.load_extension('cogs.dados')
+    await bot.load_extension('cogs.Dados')
 
 
 
