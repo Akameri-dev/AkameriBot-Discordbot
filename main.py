@@ -14,12 +14,6 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 intents = discord.Intents.default()  
 intents.message_content = True 
 bot = commands.Bot(command_prefix='.', intents = intents)
-
-
-@bot.command()
-async def comandos(ctx):
-    await ctx.send(f"Comandos: {', '.join(bot.commands)}")
-
     
 
 @bot.command()
@@ -40,6 +34,9 @@ async def load_cogs():
 
 
 
+@bot.command()
+async def comandos(ctx):
+    await ctx.send(f"Comandos: {', '.join(bot.commands)}")
 
 
 @bot.event
