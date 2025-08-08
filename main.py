@@ -1,6 +1,5 @@
 # Importacion de modulos necesarios
 import os
-import webserver
 import discord
 from dotenv import load_dotenv
 from discord.ext import commands
@@ -24,7 +23,7 @@ async def Help(ctx):
 
 
 async def load_cogs():
-    await bot.load_extension('cogs.Dados')
+    await bot.load_extension('cogs.dados')
 
 
 
@@ -45,5 +44,6 @@ async def on_ready():
 
 
 if __name__ == "__main__":
-    webserver.keep_alive()
+    from webserver import keep_alive 
+    keep_alive()
     bot.run(TOKEN)

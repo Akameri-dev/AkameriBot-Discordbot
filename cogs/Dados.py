@@ -10,5 +10,5 @@ class Dados(commands.Cog):
         resultado = random.randint(1, caras)
         await ctx.send(f"**{resultado}**")
 
-def setup(bot):
-    bot.add_cog(Dados(bot))
+async def setup(bot):  
+    await bot.add_cog(Dados(bot))
