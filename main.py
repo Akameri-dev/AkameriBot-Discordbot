@@ -56,6 +56,9 @@ async def load_cogs():
 
 
 
+
+
+
 @bot.event
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
