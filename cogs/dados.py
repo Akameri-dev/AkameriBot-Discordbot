@@ -5,7 +5,6 @@ class Dados(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-Actualizacion/FichaPersonaje
     @commands.command(aliases=['d', 'r'])
     async def roll(self, ctx, caras: int = 6):
         resultado = random.randint(1, caras)

@@ -68,10 +68,10 @@ async def on_ready():
     await bot.change_presence(
     activity=discord.Activity(  
         type=discord.ActivityType.competing,  
-        name="Roleplay | .help",
+        name=".help",
         details="Apoyando a los Anarquistas"
     ),
-    status=discord.Status.online,
+    status=discord.Status.do_not_disturb,
     afk=False
 )
 
