@@ -8,13 +8,13 @@ class Help(commands.Cog):
     @commands.command(aliases=['ayuda', 'Ayuda', 'AYUDA', 'HELP'])
     async def help(self, ctx):
         embed = discord.Embed(
-            title="Ayuda de AkameriBot",
+            title="INFORMACION",
             description=(
-                "AkameriBot es un bot experimental hecho por 'Akameri', "
+                "AkameriBot es un bot experimental hecho por **'Akameri'**, "
                 "especializado en herramientas para la simulación de Roleplay. "
                 "Aquí una lista de comandos disponibles:"
             ),
-            color=discord.Color.dark_magenta()
+            color=discord.Color.dark_gold()
         )
 
         for command in self.bot.commands:
@@ -22,7 +22,7 @@ class Help(commands.Cog):
                 continue
             desc = " "
             embed.add_field(
-                name=f".{command.name}",
+                name=f"**.{command.name}**",
                 value=desc,
                 inline=False
             )

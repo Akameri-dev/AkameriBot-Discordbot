@@ -14,7 +14,13 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 # programa principal y cogs
 intents = discord.Intents.default()  
 intents.message_content = True 
-bot = commands.Bot(command_prefix='.', intents = intents, help_command=None)
+bot = commands.Bot(
+    command_prefix='.',
+    intents = intents, 
+    help_command=None,
+    activity=discord.Activity(type=discord.ActivityType.watching, name=".help"),
+    status=discord.Status.do_not_disturb,
+    )
     
 
 @bot.command()
@@ -42,15 +48,6 @@ async def on_ready():
     print(f"Bot conectado como {bot.user}")
 
     await load_cogs()
-
-    await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.competing,
-            name=".help"
-        ),
-        status=discord.Status.do_not_disturb,
-        afk=False
-    )
 
 
 if __name__ == "__main__":
