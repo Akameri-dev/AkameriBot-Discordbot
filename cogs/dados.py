@@ -8,7 +8,7 @@ class Dados(commands.Cog):
     @commands.command(aliases=['d', 'r'])
     async def roll(self, ctx, caras: int = 6):
         resultado = random.randint(1, caras)
-        await ctx.send(f"{resultado} tirado por {ctx.author.mention}")
+        await ctx.send(f"**{resultado}** tirado por {ctx.author.mention}")
 
 async def setup(bot):
     await bot.add_cog(Dados(bot))
