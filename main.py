@@ -60,20 +60,17 @@ async def load_cogs():
 
 
 @bot.event
-async def on_ready():
+async def on_ready(): 
     print(f"Bot conectado como {bot.user}")
     await load_cogs()
-
-
     await bot.change_presence(
     activity=discord.Activity(  
         type=discord.ActivityType.competing,  
         name=".help",
-        details="Apoyando a los Anarquistas"
     ),
     status=discord.Status.do_not_disturb,
     afk=False
-)
+    )
 
 
 
