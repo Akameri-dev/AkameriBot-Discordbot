@@ -18,7 +18,7 @@ bot = commands.Bot(
     command_prefix='.',
     intents = intents, 
     help_command=None,
-    activity=discord.Activity(type=discord.ActivityType.watching, name=".help"),
+    activity=discord.Activity(type=discord.ActivityType.watching, name="*.help* | AkameriBot"),
     status=discord.Status.do_not_disturb,
     )
     
