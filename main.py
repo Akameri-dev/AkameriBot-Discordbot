@@ -8,36 +8,13 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 
-# edicion del help
-class CustomHelp(commands.MinimalHelpCommand):
-    def __init__(self):
-        super().__init__()
-        self.no_category = "Comandos Generales"
-        self.command_attrs["help"] = "Muestra este mensaje de ayuda"
-    
-    async def send_bot_help(self, mapping):
-        embed = discord.Embed(
-            title="Ayuda de AkameriBot",
-            description=f"Prefijo: `{bot.command_prefix}`\nUsa `{self.clean_prefix}help [comando]` para más detalles",
-            color=0x00ff00
-        )
-        
-        for cog, commands in mapping.items():
-            if cog and cog.qualified_name == "Jishaku": continue  #Comando de debug
-            
-            filtered = await self.filter_commands(commands, sort=True)
-            if command_names := [f"`{self.clean_prefix}{c.name}`" for c in filtered]:
-                cog_name = getattr(cog, "qualified_name", self.no_category)
-                embed.add_field(name=f"**{cog_name}**", value=", ".join(command_names), inline=False )
 
-        channel = self.get_destination()
-        await channel.send(embed=embed)
+
 
 # programa principal y cogs
 intents = discord.Intents.default()  
 intents.message_content = True 
-bot = commands.Bot(command_prefix='.', intents = intents)
-bot.help_command = CustomHelp()
+bot = commands.Bot(command_prefix='.', intents = intents, help_command=None)
     
 
 @bot.command()
@@ -47,6 +24,7 @@ async def prueba(ctx):
 
 async def load_cogs():
     await bot.load_extension('cogs.dados')
+    await bot.load_extension('utils.help')
 
 
 
@@ -60,18 +38,19 @@ async def load_cogs():
 
 
 @bot.event
-async def on_ready(): 
+async def on_ready():
     print(f"Bot conectado como {bot.user}")
-    await load_cogs()
-    await bot.change_presence(
-    activity=discord.Activity(  
-        type=discord.ActivityType.competing,  
-        name=".help",
-    ),
-    status=discord.Status.do_not_disturb,
-    afk=False
-    )
 
+    await load_cogs()
+
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.competing,
+            name=".help"
+        ),
+        status=discord.Status.do_not_disturb,
+        afk=False
+    )
 
 
 if __name__ == "__main__":
