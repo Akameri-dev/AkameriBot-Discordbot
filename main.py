@@ -17,7 +17,7 @@ bot = commands.Bot(command_prefix='.', intents = intents)
     
 
 @bot.command()
-async def Help(ctx):
+async def prueba(ctx):
     await ctx.send("Nada de help, chambea a la verga")
 
 
@@ -30,13 +30,6 @@ async def load_cogs():
 
 
 
-
-
-
-
-@bot.command()
-async def comandos(ctx):
-    await ctx.send(f"Comandos: {', '.join(bot.commands)}")
 
 
 @bot.event
