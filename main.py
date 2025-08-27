@@ -30,6 +30,7 @@ async def prueba(ctx):
 
 async def load_cogs():
     await bot.load_extension('cogs.dados')
+    await bot.load_extension('cogs.personaje')
     await bot.load_extension('utils.help')
 
 
