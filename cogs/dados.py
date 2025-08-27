@@ -11,14 +11,14 @@ class Dados(commands.Cog):
         try:
             resultado, detalles, expandida = self.procesar_expresion(expresion)
             
-            respuesta = f"**Tirada de:** ``{ctx.author}``\n"
+            respuesta = f"``Tirada de: {ctx.author}``"
             respuesta += f"\n```{detalles}```"
-            respuesta += f"**Resultado:** ``{resultado}``\n"
+            respuesta += f"``Resultado: {resultado}``\n"
             
             await ctx.send(respuesta)
             
         except Exception:
-            await ctx.send(f"Error wey")
+            await ctx.send(f"``Error``")
 
     def procesar_expresion(self, expresion):
         detalles = []
