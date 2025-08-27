@@ -12,9 +12,8 @@ class Dados(commands.Cog):
             resultado, detalles, expandida = self.procesar_expresion(expresion)
             
             respuesta = f"**Tirada de:** ``{ctx.author}``\n"
-            respuesta += f"**Resultado:** ``{resultado}``\n"
-            respuesta += f"**Expresión:** ``{expandida}``\n"
             respuesta += f"\n```{detalles}```"
+            respuesta += f"**Resultado:** ``{resultado}``\n"
             
             await ctx.send(respuesta)
             
