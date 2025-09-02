@@ -84,7 +84,5 @@ async def ficha(self, ctx,Nombre: str):
     await ctx.send(embed=embed)
 
 
-
-
 async def setup(bot):
     await bot.add_cog(Personajes(bot))
