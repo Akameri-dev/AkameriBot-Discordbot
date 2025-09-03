@@ -8,6 +8,20 @@ class Personajes(commands.Cog):
         self.conn = sqlite3.connect("personajes.db")
         self.cursor = self.conn.cursor()
 
+    # Crear tabla si no existe
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS personajes (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                User_id TEXT,
+                Servidor_id TEXT,
+                Nombre TEXT,
+                Trasfondo TEXT,
+                Imagen TEXT,
+                Aprobado INTEGER DEFAULT 0
+            )
+        """)
+        self.conn.commit()
+
     @commands.command()
     async def registrar(self, ctx, Nombre: str, Imagen: str = None, *, Trasfondo: str = "Sin trasfondo"):
         User_id = str(ctx.author.id)
