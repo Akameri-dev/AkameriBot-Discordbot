@@ -72,46 +72,44 @@ class Personajes(commands.Cog):
             return await ctx.send("No puedes eliminar un personaje que no es tuyo.")
 
     @commands.command()
-    async def ficha(self, ctx, Nombre: str):
-        Servidor_id = str(ctx.guild.id)
+    async def ficha(self, ctx, Nombre: str = None):
+            Servidor_id = str(ctx.guild.id)
 
-        if Nombre:
+            if Nombre:  
+                self.cursor.execute("SELECT User_id, Nombre, Trasfondo, Imagen, Aprobado FROM personajes WHERE Nombre=? AND Servidor_id=?", (Nombre, Servidor_id))
+                personaje = self.cursor.fetchone()
 
-            self.cursor.execute("SELECT User_id, Nombre, Trasfondo, Imagen, Aprobado FROM personajes WHERE Nombre=? AND Servidor_id=?", (Nombre, Servidor_id))
-            personaje = self.cursor.fetchone()
+                if not personaje:
+                    return await ctx.send("No encontré un personaje con ese nombre.")
 
-            if not personaje:
-                return await ctx.send("No encontré un personaje con ese nombre.")
+                user_id, Nombre, Trasfondo, Imagen, Aprobado = personaje
+                estado = "Aprobado" if Aprobado == 1 else "Pendiente"
+
+                miembro = ctx.guild.get_member(int(user_id))
+                dueño = miembro.display_name if miembro else user_id
+
+                embed = discord.Embed(title=f"Ficha de {Nombre}", description=Trasfondo, color=discord.Color.dark_gold())
+                embed.add_field(name="Estado", value=estado, inline=False)
+                embed.set_footer(text=f"Dueño: {dueño}")
+                if Imagen:
+                    embed.set_thumbnail(url=Imagen)
+
+                return await ctx.send(embed=embed)
+
+            else: 
+                User_id = str(ctx.author.id)
+                self.cursor.execute("SELECT Nombre FROM personajes WHERE User_id=? AND Servidor_id=?", (User_id, Servidor_id))
+                personajes = self.cursor.fetchall()
+
+                if not personajes:
+                    return await ctx.send("No tienes personajes registrados en este servidor.")
+
+                embed = discord.Embed(title=f"Personajes de {ctx.author.display_name}", color=discord.Color.dark_gold())
+                for p in personajes:
+                    embed.add_field(name="Nombre", value=p[0], inline=False)
+
+                return await ctx.send(embed=embed)
             
-            miembro = ctx.guild.get_member(int(user_id))
-            dueño = miembro.display_name if miembro else user_id
-
-            user_id, Nombre, Trasfondo, Imagen, Aprobado = personaje
-            estado = "Aprobado" if Aprobado == 1 else "Pendiente"
-
-            embed = discord.Embed(title=f"Ficha de {Nombre}", description=Trasfondo, color=discord.Color.dark_gold())
-            embed.add_field(name="Estado", value=estado, inline=False)
-            embed.set_footer(text=f"Dueño: {dueño}")
-            if Imagen:
-                embed.set_thumbnail(url=Imagen)
-
-            await ctx.send(embed=embed)
-
-        else:
-
-            User_id = str(ctx.author.id)
-            self.cursor.execute("SELECT Nombre FROM personajes WHERE User_id=? AND Servidor_id=?", (User_id, Servidor_id))
-            personajes = self.cursor.fetchall()
-
-            if not personajes:
-                return await ctx.send("No tienes personajes registrados en este servidor.")
-
-            embed = discord.Embed(title=f"Personajes de {ctx.author.display_name}", color=discord.Color.dark_gold())
-            for p in personajes:
-                embed.add_field(name="Nombre", value=p[0], inline=False)
-
-            return await ctx.send(embed=embed)
-
 
 async def setup(bot):
     await bot.add_cog(Personajes(bot))
