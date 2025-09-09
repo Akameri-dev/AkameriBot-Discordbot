@@ -113,5 +113,7 @@ class Personajes(commands.Cog):
                 return await ctx.send(embed=embed)
             
 
+
+#fe
 async def setup(bot):
     await bot.add_cog(Personajes(bot))
