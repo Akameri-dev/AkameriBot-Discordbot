@@ -1,17 +1,19 @@
-import sqlite3
+import os
+import psycopg2
 from discord.ext import commands
 import discord
 
 class Personajes(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.conn = sqlite3.connect("personajes.db")
+        DATABASE_URL = os.getenv("DATABASE_URL")
+        self.conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         self.cursor = self.conn.cursor()
 
     # Crear tabla si no existe
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS personajes (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Id SERIAL PRIMARY KEY,
                 User_id TEXT,
                 Servidor_id TEXT,
                 Nombre TEXT,
@@ -27,13 +29,13 @@ class Personajes(commands.Cog):
         User_id = str(ctx.author.id)
         Servidor_id = str(ctx.guild.id)
 
-        self.cursor.execute("SELECT * FROM personajes WHERE Nombre=? AND Servidor_id=?", (Nombre, Servidor_id))
+        self.cursor.execute("SELECT * FROM personajes WHERE Nombre=%s AND Servidor_id=%s", (Nombre, Servidor_id))
         if self.cursor.fetchone():
             return await ctx.send("Ya existe un personaje con ese nombre en este servidor.")
         
         self.cursor.execute("""
             INSERT INTO personajes (User_id, Servidor_id, Nombre, Trasfondo, Imagen)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         """, (User_id, Servidor_id, Nombre, Trasfondo, Imagen))
         self.conn.commit()
 
@@ -44,7 +46,7 @@ class Personajes(commands.Cog):
     async def aprobar(self, ctx, Nombre: str):
         Servidor_id = str(ctx.guild.id)
 
-        self.cursor.execute("UPDATE personajes SET Aprobado=1 WHERE Nombre=? AND Servidor_id=?", (Nombre, Servidor_id))
+        self.cursor.execute("UPDATE personajes SET Aprobado=1 WHERE Nombre=%s AND Servidor_id=%s", (Nombre, Servidor_id))
         if self.cursor.rowcount == 0:
             return await ctx.send("No encontré un personaje con ese nombre.")
         self.conn.commit()
@@ -56,7 +58,7 @@ class Personajes(commands.Cog):
         Servidor_id = str(ctx.guild.id)
         User_id = str(ctx.author.id)
 
-        self.cursor.execute("SELECT User_id FROM personajes WHERE Nombre=? AND Servidor_id=?", (Nombre, Servidor_id))
+        self.cursor.execute("SELECT User_id FROM personajes WHERE Nombre=%s AND Servidor_id=%s", (Nombre, Servidor_id))
         personaje = self.cursor.fetchone()
 
         if not personaje:
@@ -76,7 +78,7 @@ class Personajes(commands.Cog):
             Servidor_id = str(ctx.guild.id)
 
             if Nombre:  
-                self.cursor.execute("SELECT User_id, Nombre, Trasfondo, Imagen, Aprobado FROM personajes WHERE Nombre=? AND Servidor_id=?", (Nombre, Servidor_id))
+                self.cursor.execute("SELECT User_id, Nombre, Trasfondo, Imagen, Aprobado FROM personajes WHERE Nombre=%s AND Servidor_id=%s", (Nombre, Servidor_id))
                 personaje = self.cursor.fetchone()
 
                 if not personaje:
@@ -98,7 +100,7 @@ class Personajes(commands.Cog):
 
             else: 
                 User_id = str(ctx.author.id)
-                self.cursor.execute("SELECT Nombre FROM personajes WHERE User_id=? AND Servidor_id=?", (User_id, Servidor_id))
+                self.cursor.execute("SELECT Nombre FROM personajes WHERE User_id=%s AND Servidor_id=%s", (User_id, Servidor_id))
                 personajes = self.cursor.fetchall()
 
                 if not personajes:
