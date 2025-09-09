@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 import os
 import psycopg2
 from discord.ext import commands
@@ -6,6 +7,7 @@ import discord
 class Personajes(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        load_dotenv()
         DATABASE_URL = os.getenv("DATABASE_URL")
         print("URL de la DB:", DATABASE_URL)  
         self.conn = psycopg2.connect(DATABASE_URL, sslmode="require")
@@ -116,3 +118,4 @@ class Personajes(commands.Cog):
             
 async def setup(bot):
     await bot.add_cog(Personajes(bot))
+
