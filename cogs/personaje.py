@@ -7,6 +7,8 @@ class Personajes(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         DATABASE_URL = os.getenv("DATABASE_URL")
+        print("URL de la DB:", DATABASE_URL)  
+        self.conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         self.conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         self.cursor = self.conn.cursor()
 
@@ -112,8 +114,5 @@ class Personajes(commands.Cog):
 
                 return await ctx.send(embed=embed)
             
-
-
-#fe
 async def setup(bot):
     await bot.add_cog(Personajes(bot))
