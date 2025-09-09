@@ -67,7 +67,7 @@ class Personajes(commands.Cog):
         dueño_id = personaje[0]
 
         if ctx.author.guild_permissions.administrator or User_id == dueño_id:
-            self.cursor.execute("DELETE FROM personajes WHERE Nombre=? AND Servidor_id=?", (Nombre, Servidor_id))
+            self.cursor.execute("DELETE FROM personajes WHERE Nombre=%s AND Servidor_id=%s", (Nombre, Servidor_id))
             self.conn.commit()
             return await ctx.send(f"El personaje **{Nombre}** fue eliminado.")
         else:
