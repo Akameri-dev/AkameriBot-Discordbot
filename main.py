@@ -59,7 +59,7 @@ async def on_ready():
 async def prueba(ctx):
     await ctx.send("chambea a la verga")
 
-@bot.tree.command(name="prueba pe", description="verificacion de los slash commands")
+@bot.tree.command(name="pruebape", description="verificacion de los slash commands")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("No wey no quiero")
 
