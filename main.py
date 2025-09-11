@@ -46,6 +46,12 @@ async def load_cogs():
 
 @bot.event
 async def on_ready():
+    try:
+        synced = await bot.tree.sync()
+        print(f"Slash commands sincronizados: {len(synced)} comandos")
+    except Exception as e:
+        print(f"Error al sincronizar slash commands: {e}")
+
     print(f"Bot conectado como {bot.user}")
 
     await load_cogs()
