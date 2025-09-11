@@ -23,10 +23,6 @@ bot = commands.Bot(
     )
     
 
-@bot.command()
-async def prueba(ctx):
-    await ctx.send("chambea a la verga")
-
 
 async def load_cogs():
     await bot.load_extension('cogs.dados')
@@ -55,6 +51,20 @@ async def on_ready():
     print(f"Bot conectado como {bot.user}")
 
     await load_cogs()
+
+
+#prueba de los bots:
+
+@bot.command()
+async def prueba(ctx):
+    await ctx.send("chambea a la verga")
+
+@bot.tree.command(name="prueba pe", description="verificacion de los slash commands")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("No wey no quiero")
+
+
+
 
 
 if __name__ == "__main__":
