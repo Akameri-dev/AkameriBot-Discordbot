@@ -78,7 +78,7 @@ class Dados(commands.Cog):
 
 
 
-    @commands.command(aliases=['d', 'r', 'tirar', 'roll'])
+    @commands.command(aliases=[ 'r', 'tirar'])
     async def roll(self, ctx, *, expresion: str = "1d6"):
         try:
             resultado, detalles, expandida = self.procesar_expresion(expresion)

@@ -5,7 +5,7 @@ class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(aliases=['ayuda', 'Ayuda', 'AYUDA', 'HELP', 'help', 'Help'])
+    @commands.command(aliases=['ayuda', 'Ayuda', 'AYUDA', 'HELP', 'Help'])
     async def help_prefix(self, ctx):
         embed = discord.Embed(
             title="INFORMACION",
