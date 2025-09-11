@@ -4,8 +4,9 @@ from discord.ext import commands
 class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.bot.tree.add_command(self.help_slash)
 
-    @commands.command(aliases=['ayuda', 'Ayuda', 'AYUDA', 'HELP'])
+    @commands.command(aliases=['ayuda', 'Ayuda', 'AYUDA', 'HELP', 'help', 'Help'])
     async def help_prefix(self, ctx):
         embed = discord.Embed(
             title="INFORMACION",
