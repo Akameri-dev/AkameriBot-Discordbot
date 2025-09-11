@@ -18,7 +18,7 @@ bot = commands.Bot(
     command_prefix='.',
     intents = intents, 
     help_command=None,
-    activity=discord.Activity(type=discord.ActivityType.watching, name="*.help* | AkameriBot"),
+    activity=discord.Activity(type=discord.ActivityType.watching, name=".Help | AkameriBot"),
     status=discord.Status.do_not_disturb,
     )
     
@@ -44,7 +44,7 @@ async def load_cogs():
 async def on_ready():
     try:
         await load_cogs()
-        
+
         synced = await bot.tree.sync()
         print(f"Slash commands sincronizados: {len(synced)} comandos")
     except Exception as e:
