@@ -12,7 +12,6 @@ class Personajes(commands.Cog):
         DATABASE_URL = os.getenv("DATABASE_URL")
         print("URL de la DB:", DATABASE_URL)  
         self.conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-        self.conn = psycopg2.connect(DATABASE_URL, sslmode="require")
         self.cursor = self.conn.cursor()
 
     # Crear tabla si no existe
@@ -46,7 +45,7 @@ class Personajes(commands.Cog):
 
         await interaction.response.send_message(f"{interaction.user.mention}, tu personaje **{Nombre}** fue registrado y espera aprobación.")
 
-    @commands.has_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     @app_commands.command(name="aprobar", description="Aprobar un personaje (solo admins)")
     async def aprobar(self, interaction: discord.Interaction, Nombre: str):
         Servidor_id = str(interaction.guild.id)
@@ -61,7 +60,7 @@ class Personajes(commands.Cog):
     @app_commands.command(name="eliminar", description="Eliminar un personaje propio o si eres admin")
     async def eliminar(self, interaction: discord.Interaction, Nombre: str):
         Servidor_id = str(interaction.guild.id)
-        User_id = str(interaction.author.id)
+        User_id = str(interaction.user.id)
 
         self.cursor.execute("SELECT User_id FROM personajes WHERE Nombre=%s AND Servidor_id=%s", (Nombre, Servidor_id))
         personaje = self.cursor.fetchone()
@@ -71,7 +70,7 @@ class Personajes(commands.Cog):
 
         dueño_id = personaje[0]
 
-        if interaction.author.guild_permissions.administrator or User_id == dueño_id:
+        if interaction.user.guild_permissions.administrator or User_id == dueño_id:
             self.cursor.execute("DELETE FROM personajes WHERE Nombre=%s AND Servidor_id=%s", (Nombre, Servidor_id))
             self.conn.commit()
             return await interaction.response.send_message(f"El personaje **{Nombre}** fue eliminado.")
@@ -79,7 +78,7 @@ class Personajes(commands.Cog):
             return await interaction.response.send_message("No puedes eliminar un personaje que no es tuyo.")
 
     @app_commands.command(name="ficha", description="Revisar Fichas del Usuario")
-    async def ficha(self, interaction: discord.interaction, Nombre: str = None):
+    async def ficha(self, interaction: discord.Interaction, Nombre: str = None):
             Servidor_id = str(interaction.guild.id)
 
             if Nombre:  
@@ -87,7 +86,7 @@ class Personajes(commands.Cog):
                 personaje = self.cursor.fetchone()
 
                 if not personaje:
-                    return await interaction.response.send_message("No encontré un personaje con ese nombre.")
+                    return await interaction.response.send_message ("No encontré un personaje con ese nombre.")
 
                 user_id, Nombre, Trasfondo, Imagen, Aprobado = personaje
                 estado = "Aprobado" if Aprobado == 1 else "Pendiente"
@@ -104,14 +103,14 @@ class Personajes(commands.Cog):
                 return await interaction.response.send_message(embed=embed)
 
             else: 
-                User_id = str(interaction.author.id)
+                User_id = str(interaction.user.id)
                 self.cursor.execute("SELECT Nombre FROM personajes WHERE User_id=%s AND Servidor_id=%s", (User_id, Servidor_id))
                 personajes = self.cursor.fetchall()
 
                 if not personajes:
                     return await interaction.response.send_message("No tienes personajes registrados en este servidor.")
 
-                embed = discord.Embed(title=f"Personajes de {interaction.author.display_name}", color=discord.Color.dark_gold())
+                embed = discord.Embed(title=f"Personajes de {interaction.user.display_name}", color=discord.Color.dark_gold())
                 for p in personajes:
                     embed.add_field(name="Nombre", value=p[0], inline=False)
 
