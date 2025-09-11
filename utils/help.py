@@ -6,7 +6,7 @@ class Help(commands.Cog):
         self.bot = bot
 
     @commands.command(aliases=['ayuda', 'Ayuda', 'AYUDA', 'HELP'])
-    async def help(self, ctx):
+    async def help_prefix(self, ctx):
         embed = discord.Embed(
             title="INFORMACION",
             description=(
@@ -30,7 +30,7 @@ class Help(commands.Cog):
         await ctx.send(embed=embed)
 
     @discord.app_commands.command(name="help", description="Muestra el recuadro de ayuda del bot.")
-    async def help(self, interaction: discord.Interaction):
+    async def help_slash(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="INFORMACION",
             description=(
