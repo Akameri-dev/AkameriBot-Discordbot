@@ -119,6 +119,5 @@ class Personajes(commands.Cog):
 
             
 async def setup(bot):
-    print("✅ Cog Personajes cargado correctamente")
     await bot.add_cog(Personajes(bot))
 

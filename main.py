@@ -25,11 +25,13 @@ bot = commands.Bot(
 
 
 async def load_cogs():
-    await bot.load_extension('cogs.dados')
-    await bot.load_extension('cogs.personaje')
-    await bot.load_extension('utils.help')
-
-
+    cogs = ['cogs.dados', 'cogs.personaje', 'utils.help']
+    for cog in cogs:
+        try:
+            await bot.load_extension(cog)
+            print(f"✅ Cog {cog} cargado correctamente")
+        except Exception as e:
+            print(f"❌ Error cargando {cog}: {e}")
 
 
 
