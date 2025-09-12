@@ -116,6 +116,9 @@ class Personajes(commands.Cog):
 
                 return await interaction.response.send_message(embed=embed)
             
+
+            
 async def setup(bot):
+    print("✅ Cog Personajes cargado correctamente")
     await bot.add_cog(Personajes(bot))
 
