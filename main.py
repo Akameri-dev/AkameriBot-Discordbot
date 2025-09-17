@@ -3,10 +3,15 @@ import os
 import discord
 from dotenv import load_dotenv
 from discord.ext import commands
+from utils.db_init import init_db
+import psycopg2
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
+conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+init_db(conn)
 
 
 
@@ -28,6 +33,7 @@ async def load_cogs():
     await bot.load_extension('cogs.dados')
     await bot.load_extension('cogs.personaje')
     await bot.load_extension('utils.help')
+    await bot.load_extension('utils.db_init')
 
 
 
