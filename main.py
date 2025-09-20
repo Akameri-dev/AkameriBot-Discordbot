@@ -27,13 +27,17 @@ bot = commands.Bot(
     status=discord.Status.do_not_disturb,
     )
     
-
+bot.conn = conn
 
 async def load_cogs():
-    await bot.load_extension('cogs.dados')
-    await bot.load_extension('cogs.personaje')
-    await bot.load_extension('utils.help')
-    await bot.load_extension('utils.db_init')
+    await bot.load_extension('cogs.dados')       
+    await bot.load_extension('cogs.personaje')  
+    await bot.load_extension('cogs.atributos') 
+    await bot.load_extension('cogs.item')      
+    await bot.load_extension('cogs.inventario') 
+    await bot.load_extension('cogs.craft')      
+    await bot.load_extension('utils.help')      
+
 
 
 
