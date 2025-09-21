@@ -33,7 +33,7 @@ bot.conn = conn
 COGS = [
     "cogs.hola",
     "cogs.dados",
-    "cogs.personaje",   # asegúrate que exista cogs/personaje.py
+    "cogs.personaje",   
     "cogs.atributos",
     "cogs.item",
     "cogs.inventario",
@@ -81,6 +81,10 @@ async def prueba(ctx):
 @bot.tree.command(name="pruebape", description="verificacion de los slash commands")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("No wey no quiero")
+
+@bot.tree.command(name="prueba2", description="verificacion de los slash commands")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("jaja mirenlo bien pendejo")
 
 async def main():
     async with bot:
