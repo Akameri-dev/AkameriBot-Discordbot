@@ -104,7 +104,6 @@ class Items(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+
 async def setup(bot: commands.Bot):
-    cog = Items(bot)
-    await bot.add_cog(cog)   
-    bot.tree.add_command(cog.item)
+    await bot.add_cog(Items(bot))
