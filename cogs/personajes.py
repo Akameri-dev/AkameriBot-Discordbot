@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import json
 
 class Personajes(commands.Cog):
     def __init__(self, bot):
@@ -18,16 +19,23 @@ class Personajes(commands.Cog):
         genero="Género del personaje",
         edad="Edad del personaje",
         imagen="URL de imagen para el personaje (opcional)",
-        historia="Historia del personaje"
+        historia="Historia del personaje (opcional)",
+        rasgos="Rasgos del personaje separados por comas (opcional)"
     )
-    async def crear_personaje(self, interaction: discord.Interaction, nombre: str, genero: str = None, edad: int = None, imagen: str = None, historia: str = None):
+    async def crear_personaje(self, interaction: discord.Interaction, nombre: str, genero: str = None, edad: int = None, 
+                             imagen: str = None, historia: str = None, rasgos: str = None):
         cur = self.conn.cursor()
 
         try:
+            # Convertir rasgos a lista JSON
+            rasgos_lista = []
+            if rasgos:
+                rasgos_lista = [r.strip() for r in rasgos.split(",") if r.strip()]
+            
             cur.execute("""
-                INSERT INTO characters (user_id, guild_id, name, gender, age, image, lore)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (str(interaction.user.id), str(interaction.guild.id), nombre, genero, edad, imagen, historia))
+                INSERT INTO characters (user_id, guild_id, name, gender, age, image, lore, traits)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """, (str(interaction.user.id), str(interaction.guild.id), nombre, genero, edad, imagen, historia, json.dumps(rasgos_lista)))
             self.conn.commit()
             await interaction.response.send_message(f"Personaje **{nombre}** creado con éxito.", ephemeral=True)
         except Exception as e:
@@ -63,14 +71,26 @@ class Personajes(commands.Cog):
         embed = discord.Embed(title=f"{name}", description=lore or "", color=discord.Color.dark_gold())
         embed.add_field(name="Género", value=gender or "No definido", inline=True)
         embed.add_field(name="Edad", value=age or "Desconocida", inline=True)
-        embed.add_field(name="Atributos", value=str(attributes) if attributes else "Ninguno", inline=False)
-        embed.add_field(name="Rasgos", value=", ".join(traits) if traits else "Ninguno", inline=False)
+        
+        # Formatear atributos sin comillas
+        if attributes and attributes != {}:
+            atributos_str = "\n".join([f"**{k}**: {v}" for k, v in attributes.items()])
+            embed.add_field(name="Atributos", value=atributos_str, inline=False)
+        else:
+            embed.add_field(name="Atributos", value="Ninguno", inline=False)
+        
+        # Mostrar rasgos
+        if traits and len(traits) > 0:
+            rasgos_str = "\n".join([f"• {trait}" for trait in traits])
+            embed.add_field(name="Rasgos", value=rasgos_str, inline=False)
+        else:
+            embed.add_field(name="Rasgos", value="Ninguno", inline=False)
+            
         embed.add_field(name="Estado", value="✅ Aprobado" if approved else "⏳ Pendiente", inline=True)
         
         if image:
-            embed.set_thumbnail(url=image)
+            embed.set_image(url=image)
             
-
         if is_admin:
             try:
                 owner = await interaction.guild.fetch_member(int(user_id))
@@ -80,6 +100,114 @@ class Personajes(commands.Cog):
             embed.set_footer(text=f"Dueño: {owner_name}")
 
         await interaction.response.send_message(embed=embed)
+    
+    @personaje.command(name="agregar_rasgo", description="Agrega rasgos a un personaje (solo admins)")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        nombre="Nombre del personaje",
+        rasgos="Rasgos a agregar, separados por comas"
+    )
+    async def agregar_rasgo(self, interaction: discord.Interaction, nombre: str, rasgos: str):
+        cur = self.conn.cursor()
+        
+        try:
+            # Verificar que el personaje existe
+            cur.execute("SELECT traits FROM characters WHERE guild_id=%s AND name=%s", 
+                       (str(interaction.guild.id), nombre))
+            resultado = cur.fetchone()
+            
+            if not resultado:
+                await interaction.response.send_message("No encontré ese personaje.", ephemeral=True)
+                return
+                
+            # Obtener rasgos actuales
+            rasgos_actuales = resultado[0] or []
+            
+            # Convertir nuevos rasgos a lista
+            nuevos_rasgos = [r.strip() for r in rasgos.split(",") if r.strip()]
+            
+            # Filtrar rasgos que ya existen
+            rasgos_a_agregar = [r for r in nuevos_rasgos if r not in rasgos_actuales]
+            
+            if not rasgos_a_agregar:
+                await interaction.response.send_message("Todos los rasgos ya existen en el personaje.", ephemeral=True)
+                return
+                
+            # Combinar rasgos
+            todos_los_rasgos = rasgos_actuales + rasgos_a_agregar
+            
+            # Actualizar en la base de datos
+            cur.execute("""
+                UPDATE characters 
+                SET traits = %s::jsonb 
+                WHERE guild_id=%s AND name=%s
+            """, (json.dumps(todos_los_rasgos), str(interaction.guild.id), nombre))
+            
+            self.conn.commit()
+            
+            await interaction.response.send_message(
+                f"Rasgos agregados a **{nombre}**: {', '.join(rasgos_a_agregar)}", 
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"Error al agregar rasgos: {str(e)}", ephemeral=True)
+        finally:
+            cur.close()
+    
+    @personaje.command(name="eliminar_rasgo", description="Elimina rasgos de un personaje (solo admins)")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        nombre="Nombre del personaje",
+        rasgos="Rasgos a eliminar, separados por comas"
+    )
+    async def eliminar_rasgo(self, interaction: discord.Interaction, nombre: str, rasgos: str):
+        cur = self.conn.cursor()
+        
+        try:
+            # Verificar que el personaje existe
+            cur.execute("SELECT traits FROM characters WHERE guild_id=%s AND name=%s", 
+                       (str(interaction.guild.id), nombre))
+            resultado = cur.fetchone()
+            
+            if not resultado:
+                await interaction.response.send_message("No encontré ese personaje.", ephemeral=True)
+                return
+                
+            # Obtener rasgos actuales
+            rasgos_actuales = resultado[0] or []
+            
+            # Convertir rasgos a eliminar a lista
+            rasgos_a_eliminar = [r.strip() for r in rasgos.split(",") if r.strip()]
+            
+            # Filtrar rasgos que existen
+            rasgos_existentes = [r for r in rasgos_a_eliminar if r in rasgos_actuales]
+            
+            if not rasgos_existentes:
+                await interaction.response.send_message("Ninguno de los rasgos existe en el personaje.", ephemeral=True)
+                return
+                
+            # Eliminar rasgos
+            nuevos_rasgos = [r for r in rasgos_actuales if r not in rasgos_existentes]
+            
+            # Actualizar en la base de datos
+            cur.execute("""
+                UPDATE characters 
+                SET traits = %s::jsonb 
+                WHERE guild_id=%s AND name=%s
+            """, (json.dumps(nuevos_rasgos), str(interaction.guild.id), nombre))
+            
+            self.conn.commit()
+            
+            await interaction.response.send_message(
+                f"Rasgos eliminados de **{nombre}**: {', '.join(rasgos_existentes)}", 
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"Error al eliminar rasgos: {str(e)}", ephemeral=True)
+        finally:
+            cur.close()
     
     @personaje.command(name="eliminar", description="Elimina un personaje (solo dueño o admin)")
     async def eliminar_personaje(self, interaction: discord.Interaction, nombre: str):
@@ -135,7 +263,7 @@ class Personajes(commands.Cog):
             await interaction.response.send_message("No encontré ese personaje.", ephemeral=True)
             return
 
-        await interaction.response.send_message(f"✅ Personaje **{result[0]}** ha sido aprobado.", ephemeral=False)
+        await interaction.response.send_message(f"Personaje **{result[0]}** ha sido aprobado.", ephemeral=False)
 
     @personaje.command(name="lista", description="Lista todos los personajes del servidor")
     async def lista_personajes(self, interaction: discord.Interaction):

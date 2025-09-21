@@ -31,6 +31,15 @@ CREATE TABLE IF NOT EXISTS items (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Agregar la columna image si no existe
+ALTER TABLE items ADD COLUMN IF NOT EXISTS image TEXT;
+
+-- Agregar la columna craft si no existe
+ALTER TABLE items ADD COLUMN IF NOT EXISTS craft JSONB DEFAULT '{}'::jsonb;
+
+-- Agregar la columna decompose si no existe
+ALTER TABLE items ADD COLUMN IF NOT EXISTS decompose JSONB DEFAULT '{}'::jsonb;
+
 -- =============================
 -- INVENTARIO
 -- =============================
@@ -100,3 +109,5 @@ CREATE TABLE IF NOT EXISTS attribute_defs (
   min_value NUMERIC,
   max_value NUMERIC
 );
+
+
