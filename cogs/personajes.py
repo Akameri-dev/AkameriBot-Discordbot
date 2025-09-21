@@ -5,22 +5,29 @@ from discord.ext import commands
 class Personajes(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        
     @property
     def conn(self):
-            return self.bot.conn
-
+        return self.bot.conn
 
     personaje = app_commands.Group(name="personaje", description="Gestión de personajes")
 
     @personaje.command(name="registrar", description="Crea tu personaje en este servidor")
-    async def crear_personaje(self, interaction: discord.Interaction, nombre: str, genero: str = None, edad: int = None):
+    @app_commands.describe(
+        nombre="Nombre del personaje",
+        genero="Género del personaje",
+        edad="Edad del personaje",
+        imagen="URL de imagen para el personaje (opcional)",
+        historia="Historia del personaje"
+    )
+    async def crear_personaje(self, interaction: discord.Interaction, nombre: str, genero: str = None, edad: int = None, imagen: str = None, historia: str = None):
         cur = self.conn.cursor()
 
         try:
             cur.execute("""
-                INSERT INTO characters (user_id, guild_id, name, gender, age)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (str(interaction.user.id), str(interaction.guild.id), nombre, genero, edad))
+                INSERT INTO characters (user_id, guild_id, name, gender, age, image, lore)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (str(interaction.user.id), str(interaction.guild.id), nombre, genero, edad, imagen, historia))
             self.conn.commit()
             await interaction.response.send_message(f"Personaje **{nombre}** creado con éxito.", ephemeral=True)
         except Exception as e:
@@ -33,7 +40,7 @@ class Personajes(commands.Cog):
         cur = self.conn.cursor()
 
         cur.execute("""
-            SELECT name, gender, age, attributes, traits, lore, image, approved
+            SELECT name, gender, age, attributes, traits, lore, image, approved, user_id
             FROM characters
             WHERE guild_id=%s AND name=%s
         """, (str(interaction.guild.id), nombre))
@@ -44,18 +51,71 @@ class Personajes(commands.Cog):
             await interaction.response.send_message("No encontré ese personaje.", ephemeral=True)
             return
 
-        name, gender, age, attributes, traits, lore, image, approved = row
+        name, gender, age, attributes, traits, lore, image, approved, user_id = row
 
-        embed = discord.Embed(title=f"{name}", description=lore or "", color=discord.Color.blue())
+        is_owner = str(interaction.user.id) == user_id
+        is_admin = interaction.user.guild_permissions.administrator
+        
+        if not approved and not is_owner and not is_admin:
+            await interaction.response.send_message("Este personaje aún no ha sido aprobado y solo puede ser visto por su dueño o administradores.", ephemeral=True)
+            return
+
+        embed = discord.Embed(title=f"{name}", description=lore or "", color=discord.Color.dark_gold())
         embed.add_field(name="Género", value=gender or "No definido", inline=True)
         embed.add_field(name="Edad", value=age or "Desconocida", inline=True)
         embed.add_field(name="Atributos", value=str(attributes) if attributes else "Ninguno", inline=False)
         embed.add_field(name="Rasgos", value=", ".join(traits) if traits else "Ninguno", inline=False)
-        embed.add_field(name="Estado", value="Aprobado" if approved else "Pendiente", inline=True)
+        embed.add_field(name="Estado", value="✅ Aprobado" if approved else "⏳ Pendiente", inline=True)
+        
         if image:
             embed.set_thumbnail(url=image)
+            
+
+        if is_admin:
+            try:
+                owner = await interaction.guild.fetch_member(int(user_id))
+                owner_name = owner.display_name
+            except:
+                owner_name = f"Usuario con ID {user_id}"
+            embed.set_footer(text=f"Dueño: {owner_name}")
 
         await interaction.response.send_message(embed=embed)
+    
+    @personaje.command(name="eliminar", description="Elimina un personaje (solo dueño o admin)")
+    async def eliminar_personaje(self, interaction: discord.Interaction, nombre: str):
+        cur = self.conn.cursor()
+        
+        try:
+            cur.execute("""
+                SELECT user_id FROM characters 
+                WHERE guild_id=%s AND name=%s
+            """, (str(interaction.guild.id), nombre))
+            result = cur.fetchone()
+            
+            if not result:
+                await interaction.response.send_message("No encontré ese personaje.", ephemeral=True)
+                return
+                
+            owner_id = result[0]
+            is_owner = str(interaction.user.id) == owner_id
+            is_admin = interaction.user.guild_permissions.administrator
+            
+            if not is_owner and not is_admin:
+                await interaction.response.send_message("Solo el dueño del personaje o un administrador puede eliminarlo.", ephemeral=True)
+                return
+                
+            cur.execute("""
+                DELETE FROM characters 
+                WHERE guild_id=%s AND name=%s
+            """, (str(interaction.guild.id), nombre))
+            self.conn.commit()
+            
+            await interaction.response.send_message(f"Personaje **{nombre}** eliminado con éxito.", ephemeral=True)
+            
+        except Exception as e:
+            await interaction.response.send_message("Ocurrió un error al eliminar el personaje.", ephemeral=True)
+        finally:
+            cur.close()
     
     @personaje.command(name="aprobar", description="Aprueba un personaje (solo admins)")
     @app_commands.checks.has_permissions(administrator=True)
@@ -92,7 +152,7 @@ class Personajes(commands.Cog):
             await interaction.response.send_message("No hay personajes registrados en este servidor.", ephemeral=True)
             return
 
-        embed = discord.Embed(title="📜 Personajes del servidor", color=discord.Color.dark_gold())
+        embed = discord.Embed(title="Personajes del servidor", color=discord.Color.dark_gold())
         for name, approved in rows:
             estado = "✅ Aprobado" if approved else "⏳ Pendiente"
             embed.add_field(name=name, value=estado, inline=False)
