@@ -179,7 +179,7 @@ class Inventario(commands.Cog):
         finally:
             cur.close()
 
+
+
 async def setup(bot: commands.Bot):
-    cog = Inventario(bot)
-    await bot.add_cog(cog)
-    bot.tree.add_command(cog.inventario)
+    await bot.add_cog(Inventario(bot))

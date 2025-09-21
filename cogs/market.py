@@ -478,7 +478,6 @@ class Market(commands.Cog):
         finally:
             cur.close()
 
+
 async def setup(bot: commands.Bot):
-    cog = Market(bot)
-    await bot.add_cog(cog)
-    bot.tree.add_command(cog.mercado)
+    await bot.add_cog(Market(bot))

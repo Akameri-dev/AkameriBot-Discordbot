@@ -72,9 +72,4 @@ class Atributos(commands.Cog):
         await interaction.response.send_message(f"{atributo} de **{personaje}** ahora es {valor}.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
-    cog = Atributos(bot)
-    await bot.add_cog(cog)
-    bot.tree.add_command(cog.atributos)
-    print(">>> Grupo 'atributos' registrado en bot.tree:", cog.atributos)
-    for cmd in bot.tree.walk_commands():
-        print(" -", cmd.qualified_name)
+    await bot.add_cog(Atributos(bot))
