@@ -272,3 +272,9 @@ class Craft(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Craft(bot))
+
+async def setup(bot: commands.Bot):
+    cog = Craft(bot)
+    await bot.add_cog(cog)
+    bot.tree.add_command(cog.craft)
+    bot.tree.add_command(cog.decomp)

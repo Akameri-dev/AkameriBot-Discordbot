@@ -14,3 +14,8 @@ class Test(commands.Cog):
 # setup obligatorio
 async def setup(bot: commands.Bot):
     await bot.add_cog(Test(bot))
+
+async def setup(bot: commands.Bot):
+    cog = Test(bot)
+    await bot.add_cog(cog)
+

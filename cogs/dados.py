@@ -131,5 +131,6 @@ class Dados(commands.Cog):
         return resultado, "\n".join(detalles), expresion_expandida
     
 
-async def setup(bot):
-    await bot.add_cog(Dados(bot))
+async def setup(bot: commands.Bot):
+    cog = Dados(bot)
+    await bot.add_cog(cog)

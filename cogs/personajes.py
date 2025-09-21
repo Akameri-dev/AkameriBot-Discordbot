@@ -99,5 +99,7 @@ class Personajes(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-async def setup(bot):
-    await bot.add_cog(Personajes(bot))
+async def setup(bot: commands.Bot):
+    cog = Personajes(bot)
+    await bot.add_cog(cog)
+    bot.tree.add_command(cog.personaje)

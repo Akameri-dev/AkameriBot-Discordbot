@@ -1,5 +1,6 @@
-# Importacion de modulos necesarios
+
 import os
+import asyncio
 import discord
 from dotenv import load_dotenv
 from discord.ext import commands
@@ -10,77 +11,85 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Conexión DB (la dejamos global y la guardamos en bot)
 conn = psycopg2.connect(DATABASE_URL, sslmode="require")
 init_db(conn)
 
+intents = discord.Intents.default()
+intents.message_content = True
 
-
-
-# programa principal y cogs
-intents = discord.Intents.default()  
-intents.message_content = True 
 bot = commands.Bot(
     command_prefix='.',
-    intents = intents, 
+    intents=intents,
     help_command=None,
     activity=discord.Activity(type=discord.ActivityType.watching, name=".Help | AkameriBot"),
     status=discord.Status.do_not_disturb,
-    )
-    
+)
+
+# Exponer conexión al resto de cogs
 bot.conn = conn
 
+# Lista de cogs que vas a cargar (ajusta nombres si tus ficheros son distintos)
+COGS = [
+    "cogs.hola",
+    "cogs.dados",
+    "cogs.personaje",   # asegúrate que exista cogs/personaje.py
+    "cogs.atributos",
+    "cogs.item",
+    "cogs.inventario",
+    "cogs.craft",
+    "utils.help",
+]
+
 async def load_cogs():
-    await bot.load_extension('cogs.hola')
-    await bot.load_extension('cogs.dados')       
-    await bot.load_extension('cogs.personaje')  
-    await bot.load_extension('cogs.atributos') 
-    await bot.load_extension('cogs.item')      
-    await bot.load_extension('cogs.inventario') 
-    await bot.load_extension('cogs.craft')      
-    await bot.load_extension('utils.help')      
-
-
-
-
-
-
-
-
-
-
-
-
+    for ext in COGS:
+        try:
+            await bot.load_extension(ext)
+            print(f"[LOAD] Extension cargada: {ext}")
+        except Exception as e:
+            print(f"[ERROR LOAD] No se pudo cargar {ext}: {e}")
 
 @bot.event
 async def on_ready():
+    # Mostramos comandos que el bot tiene en su árbol antes del sync (debug)
+    print("=== bot.tree.walk_commands() antes sync ===")
+    for c in bot.tree.walk_commands():
+        print(" -", c.qualified_name)
+
     try:
-        await load_cogs()
-
         synced = await bot.tree.sync()
-        print(f"Slash commands sincronizados: {len(synced)} comandos")
+        print(f"Slash commands sincronizados: {len(synced)}")
+        print("=== Comandos devueltos por sync ===")
+        for c in synced:
+            # c puede ser AppCommand o Command
+            try:
+                print(" *", getattr(c, "name", str(c)))
+            except:
+                print(" *", str(c))
     except Exception as e:
-        print(f"Error al sincronizar slash commands: {e}")
+        print(f"[ERROR] al sincronizar slash commands: {e}")
 
+    await bot.tree.sync()
     print(f"Bot conectado como {bot.user}")
 
-    
-
-
-#prueba de los bots:
-
+# Comando de prueba tradicional
 @bot.command()
 async def prueba(ctx):
     await ctx.send("chambea a la verga")
 
+# Slash de prueba que siempre funciona (para comprobar infra)
 @bot.tree.command(name="pruebape", description="verificacion de los slash commands")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("No wey no quiero")
 
-
-
-
+async def main():
+    async with bot:
+        # cargar extensiones antes de start evita condiciones raras
+        await load_cogs()
+        await bot.start(TOKEN)
 
 if __name__ == "__main__":
-    from webserver import keep_alive 
+    # si estás en render, sigue usando tu keep_alive si hace falta
+    from webserver import keep_alive
     keep_alive()
-    bot.run(TOKEN)
+    asyncio.run(main())
