@@ -11,9 +11,6 @@ class Test(commands.Cog):
     async def hola(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"¡Hola {interaction.user.mention}! 👋")
 
-# setup obligatorio
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Test(bot))
 
 async def setup(bot: commands.Bot):
     cog = Test(bot)
