@@ -30,6 +30,7 @@ bot = commands.Bot(
 bot.conn = conn
 
 async def load_cogs():
+    await bot.load_extension('cogs.hola')
     await bot.load_extension('cogs.dados')       
     await bot.load_extension('cogs.personaje')  
     await bot.load_extension('cogs.atributos') 
