@@ -6,13 +6,13 @@ class Test(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # Slash command de prueba
     @app_commands.command(name="hola", description="Responde con un saludo")
     async def hola(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"¡Hola {interaction.user.mention}! 👋")
 
-
 async def setup(bot: commands.Bot):
     cog = Test(bot)
     await bot.add_cog(cog)
+    bot.tree.add_command(cog.hola) 
+
 
