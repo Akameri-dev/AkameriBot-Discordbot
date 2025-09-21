@@ -33,7 +33,7 @@ bot.conn = conn
 COGS = [
     "cogs.hola",
     "cogs.dados",
-    "cogs.personaje",   
+    "cogs.personajes",   
     "cogs.atributos",
     "cogs.item",
     "cogs.inventario",
@@ -51,7 +51,6 @@ async def load_cogs():
 
 @bot.event
 async def on_ready():
-    # Mostramos comandos que el bot tiene en su árbol antes del sync (debug)
     print("=== bot.tree.walk_commands() antes sync ===")
     for c in bot.tree.walk_commands():
         print(" -", c.qualified_name)
@@ -61,16 +60,12 @@ async def on_ready():
         print(f"Slash commands sincronizados: {len(synced)}")
         print("=== Comandos devueltos por sync ===")
         for c in synced:
-            # c puede ser AppCommand o Command
-            try:
-                print(" *", getattr(c, "name", str(c)))
-            except:
-                print(" *", str(c))
+            print(" *", getattr(c, "name", str(c)))
     except Exception as e:
         print(f"[ERROR] al sincronizar slash commands: {e}")
 
-    await bot.tree.sync()
     print(f"Bot conectado como {bot.user}")
+
 
 # Comando de prueba tradicional
 @bot.command()
@@ -78,13 +73,10 @@ async def prueba(ctx):
     await ctx.send("chambea a la verga")
 
 # Slash de prueba que siempre funciona (para comprobar infra)
-@bot.tree.command(name="pruebape", description="verificacion de los slash commands")
+@bot.tree.command(name="prueba", description="verificacion de los slash commands")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("No wey no quiero")
 
-@bot.tree.command(name="prueba2", description="verificacion de los slash commands")
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("jaja mirenlo bien pendejo")
 
 async def main():
     async with bot:
