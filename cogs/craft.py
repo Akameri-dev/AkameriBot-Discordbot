@@ -270,8 +270,7 @@ class Craft(commands.Cog):
         await interaction.response.send_message(f"Has descompuesto **{objeto}**.", ephemeral=True)
 
 
-async def setup(bot):
-    await bot.add_cog(Craft(bot))
+
 
 async def setup(bot: commands.Bot):
     cog = Craft(bot)
