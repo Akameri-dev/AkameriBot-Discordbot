@@ -31,12 +31,12 @@ bot.conn = conn
 
 # Lista de cogs que vas a cargar (ajusta nombres si tus ficheros son distintos)
 COGS = [
-    "cogs.hola",
     "cogs.dados",
     "cogs.personajes",   
     "cogs.atributos",
     "cogs.item",
     "cogs.inventario",
+    "cogs.market",
     "cogs.craft",
     "utils.help",
 ]
