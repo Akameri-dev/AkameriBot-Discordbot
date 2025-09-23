@@ -86,12 +86,7 @@ async def main():
         await bot.start(TOKEN)
 
 if __name__ == "__main__":
-    # si estás en render, sigue usando tu keep_alive si hace falta
     from webserver import keep_alive
     keep_alive()
-    # Esperar 5 segundos para que Flask se inicie completamente
-    print("Esperando a que el servidor Flask se inicie...")
-    time.sleep(5)
-    print("Iniciando bot de Discord...")
     asyncio.run(main())
 

@@ -40,7 +40,7 @@ class Inventario(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @inventario.command(name="transferir", description="Transfiere un ítem de un personaje a otro")
+    @inventario.command(name="transferir", description="Transfiere un item de un personaje a otro")
     async def transferir_item(
         self, interaction: discord.Interaction, origen: str, destino: str, item: str, cantidad: int
     ):
@@ -59,7 +59,7 @@ class Inventario(commands.Cog):
             cur.execute("SELECT id FROM items WHERE name=%s", (item,))
             item_row = cur.fetchone()
             if not item_row:
-                await interaction.response.send_message("Ese ítem no existe.", ephemeral=True)
+                await interaction.response.send_message("Ese item no existe.", ephemeral=True)
                 return
             item_id = item_row[0]
 
@@ -101,7 +101,7 @@ class Inventario(commands.Cog):
                 await self.transferir_item(interaction, origen, destino, parte.strip(), 1)
 
 
-    @inventario.command(name="tirar", description="Tira un ítem de un inventario")
+    @inventario.command(name="tirar", description="Tira un item de un inventario")
     async def tirar_item(self, interaction: discord.Interaction, personaje: str, item: str, cantidad: int):
         cur = self.conn.cursor()
         try:
@@ -115,7 +115,7 @@ class Inventario(commands.Cog):
             cur.execute("SELECT id FROM items WHERE name=%s", (item,))
             it = cur.fetchone()
             if not it:
-                await interaction.response.send_message("Ítem no encontrado.", ephemeral=True)
+                await interaction.response.send_message("Item no encontrado.", ephemeral=True)
                 return
 
             cur.execute("UPDATE inventory SET quantity = quantity - %s WHERE character_id=%s AND item_id=%s",
@@ -128,7 +128,7 @@ class Inventario(commands.Cog):
             cur.close()
 
 
-    @inventario.command(name="equipar", description="Equipa un ítem de un inventario")
+    @inventario.command(name="equipar", description="Equipa un item de un inventario")
     async def equipar_item(self, interaction: discord.Interaction, personaje: str, item: str):
         cur = self.conn.cursor()
         try:
@@ -165,7 +165,7 @@ class Inventario(commands.Cog):
             cur.execute("SELECT id FROM items WHERE name=%s", (item,))
             it = cur.fetchone()
             if not it:
-                await interaction.response.send_message("Ítem no encontrado.", ephemeral=True)
+                await interaction.response.send_message("Item no encontrado.", ephemeral=True)
                 return
 
             cur.execute("""

@@ -24,5 +24,3 @@ def keep_alive():
     server.daemon = True
     server.start()
     
-    import time
-    time.sleep(2)
