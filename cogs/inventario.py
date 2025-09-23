@@ -71,6 +71,9 @@ class Inventario(commands.Cog):
                 color=discord.Color.dark_gold()
             )
 
+            # Agregar imagen de la mochila
+            embed.set_thumbnail(url="https://media.discordapp.net/attachments/1193596513469866094/1419918116367892490/1-removebg-preview.png?ex=68d3814b&is=68d22fcb&hm=521fea6d3f76825029a9d2e83865c2266493b3fa8a00ec785817cd061b3b9c6e&=&format=webp&quality=lossless")
+
             # Obtener límite del inventario
             cur.execute("SELECT general_limit FROM inventory_limits WHERE guild_id=%s", (str(interaction.guild.id),))
             limit_row = cur.fetchone()
@@ -80,7 +83,7 @@ class Inventario(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
         except Exception as e:
-            await interaction.response.send_message("Error al mostrar el inventario.", ephemeral=True)
+            await interaction.response.send_message(f"Error al mostrar el inventario: {str(e)}", ephemeral=True)
         finally:
             cur.close()
 
@@ -116,20 +119,24 @@ class Inventario(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(
         nombre="Nombre de la ranura",
-        limite="Límite de items que se pueden equipar en esta ranura"
+        limite="Límite de items que se pueden equipar en esta ranura",
+        requiere_equipable="¿Requiere que el item sea equipable? (si/no, por defecto: no)"
     )
-    async def crear_ranura(self, interaction: discord.Interaction, nombre: str, limite: int = 1):
+    async def crear_ranura(self, interaction: discord.Interaction, nombre: str, limite: int = 1, requiere_equipable: str = "no"):
         cur = self.conn.cursor()
         try:
+            requiere_equipable_bool = requiere_equipable.lower() in ['sí', 'si', 's', 'yes', 'y', 'true', '1']
+            
             cur.execute("""
-                INSERT INTO equipment_slots (guild_id, name, slot_limit)
-                VALUES (%s, %s, %s)
-            """, (str(interaction.guild.id), nombre, limite))
+                INSERT INTO equipment_slots (guild_id, name, slot_limit, requiere_equipable)
+                VALUES (%s, %s, %s, %s)
+            """, (str(interaction.guild.id), nombre, limite, requiere_equipable_bool))
             
             self.conn.commit()
             
+            tipo_ranura = "equipable" if requiere_equipable_bool else "general"
             await interaction.response.send_message(
-                f"Ranura **{nombre}** creada con límite de **{limite}** item(s).", 
+                f"Ranura **{nombre}** creada ({tipo_ranura}) con límite de **{limite}** item(s).", 
                 ephemeral=True
             )
             
@@ -166,7 +173,7 @@ class Inventario(commands.Cog):
         cur = self.conn.cursor()
         try:
             cur.execute("""
-                SELECT name, slot_limit 
+                SELECT name, slot_limit, requiere_equipable 
                 FROM equipment_slots 
                 WHERE guild_id=%s 
                 ORDER BY name
@@ -178,11 +185,12 @@ class Inventario(commands.Cog):
                 await interaction.response.send_message("No hay ranuras de equipamiento definidas.", ephemeral=True)
                 return
 
-            embed = discord.Embed(title="Ranuras de Equipamiento", color=discord.Color.dark_gold())
+            embed = discord.Embed(title="🔸 Ranuras de Equipamiento", color=discord.Color.dark_gold())
             
-            for name, limit in rows:
+            for name, limit, requiere_equipable in rows:
+                tipo = "🔹 Equipable" if requiere_equipable else "📦 General"
                 embed.add_field(
-                    name=f"🔸 {name}",
+                    name=f"{tipo}: {name}",
                     value=f"Límite: {limit} item(s)",
                     inline=False
                 )
@@ -204,7 +212,7 @@ class Inventario(commands.Cog):
         cur = self.conn.cursor()
         try:
             # Verificar que la ranura existe
-            cur.execute("SELECT slot_limit FROM equipment_slots WHERE guild_id=%s AND name=%s", 
+            cur.execute("SELECT slot_limit, requiere_equipable FROM equipment_slots WHERE guild_id=%s AND name=%s", 
                        (str(interaction.guild.id), ranura))
             slot_info = cur.fetchone()
             
@@ -212,7 +220,7 @@ class Inventario(commands.Cog):
                 await interaction.response.send_message("Esa ranura no existe.", ephemeral=True)
                 return
 
-            slot_limit = slot_info[0]
+            slot_limit, requiere_equipable = slot_info
 
             # Verificar que el personaje existe
             cur.execute("SELECT id FROM characters WHERE guild_id=%s AND name=%s", 
@@ -225,7 +233,7 @@ class Inventario(commands.Cog):
 
             char_id = char_info[0]
 
-            # Verificar que el item existe y es equipable
+            # Verificar que el item existe
             cur.execute("SELECT id, equipable FROM items WHERE name=%s", (item,))
             item_info = cur.fetchone()
             
@@ -235,8 +243,9 @@ class Inventario(commands.Cog):
 
             item_id, equipable = item_info
             
-            if not equipable:
-                await interaction.response.send_message("Este item no se puede equipar.", ephemeral=True)
+            # Verificar si la ranura requiere que el item sea equipable
+            if requiere_equipable and not equipable:
+                await interaction.response.send_message("Esta ranura requiere items equipables.", ephemeral=True)
                 return
 
             # Verificar que el personaje tiene el item
@@ -281,7 +290,7 @@ class Inventario(commands.Cog):
             )
 
         except Exception as e:
-            await interaction.response.send_message("Error al equipar el item.", ephemeral=True)
+            await interaction.response.send_message(f"Error al equipar el item: {str(e)}", ephemeral=True)
         finally:
             cur.close()
 
@@ -333,7 +342,6 @@ class Inventario(commands.Cog):
         finally:
             cur.close()
 
-    # Mantener los comandos existentes (transferir, tirar, give) pero actualizar para manejar usos
     @inventario.command(name="usar", description="Usa un item del inventario (reduce sus usos)")
     @app_commands.describe(
         personaje="Nombre del personaje",
@@ -399,14 +407,13 @@ class Inventario(commands.Cog):
             await interaction.response.send_message(message, ephemeral=False)
 
         except Exception as e:
-            await interaction.response.send_message("Error al usar el item.", ephemeral=True)
+            await interaction.response.send_message(f"Error al usar el item: {str(e)}", ephemeral=True)
         finally:
             cur.close()
 
-    # Los comandos transferir, tirar, give se mantienen similares pero actualizados para manejar current_uses
     @inventario.command(name="transferir", description="Transfiere un item de un personaje a otro")
     async def transferir_item(
-        self, interaction: discord.Interaction, origen: str, destino: str, item: str, cantidad: int
+        self, interaction: discord.Interaction, origen: str, destino: str, item: str, cantidad: int = 1
     ):
         cur = self.conn.cursor()
         try:
@@ -449,7 +456,7 @@ class Inventario(commands.Cog):
 
             # Eliminar si la cantidad llega a 0
             cur.execute("DELETE FROM inventory WHERE character_id=%s AND item_id=%s AND quantity <= 0", 
-                    (pj_origen[0], item_id))
+                       (pj_origen[0], item_id))
 
             # Agregar al destino (copiar current_uses si existe)
             current_uses = inv_row[1]  # Puede ser None
@@ -473,52 +480,14 @@ class Inventario(commands.Cog):
             await interaction.response.send_message(f"Error en la transferencia: {str(e)}", ephemeral=True)
         finally:
             cur.close()
-        # Implementación similar a la anterior pero copiando current_uses
 
-
-    @inventario.command(name="tirar", description="Tira un item de un inventario")
-    async def tirar_item(self, interaction: discord.Interaction, personaje: str, item: str, cantidad: int):
-        cur = self.conn.cursor()
-        try:
-            cur.execute("""
-                SELECT c.id, i.id 
-                FROM characters c 
-                JOIN items i ON i.name = %s
-                WHERE c.guild_id=%s AND c.name=%s
-            """, (item, str(interaction.guild.id), personaje))
-            
-            result = cur.fetchone()
-            if not result:
-                await interaction.response.send_message("Personaje o item no encontrado.", ephemeral=True)
-                return
-
-            char_id, item_id = result
-
-            cur.execute("""
-                UPDATE inventory 
-                SET quantity = quantity - %s 
-                WHERE character_id=%s AND item_id=%s
-            """, (cantidad, char_id, item_id))
-
-            # Eliminar si la cantidad llega a 0
-            cur.execute("DELETE FROM inventory WHERE character_id=%s AND item_id=%s AND quantity <= 0", 
-                    (char_id, item_id))
-
-            self.conn.commit()
-            await interaction.response.send_message(f"{personaje} tiró {cantidad}x {item}.", ephemeral=False)
-        
-        except Exception as e:
-            await interaction.response.send_message(f"Error al tirar el item: {str(e)}", ephemeral=True)
-        finally:
-            cur.close()
-
-    @inventario.command(name="give", description="Añade Items mágicamente a un inventario (solo admins)")
+    @inventario.command(name="give", description="Añade ítems mágicamente a un inventario (solo admins)")
     @app_commands.checks.has_permissions(administrator=True)
-    async def give_item(self, interaction: discord.Interaction, personaje: str, item: str, cantidad: int):
+    async def give_item(self, interaction: discord.Interaction, personaje: str, item: str, cantidad: int = 1):
         cur = self.conn.cursor()
         try:
             cur.execute("SELECT id FROM characters WHERE guild_id=%s AND name=%s", 
-                    (str(interaction.guild.id), personaje))
+                       (str(interaction.guild.id), personaje))
             char_info = cur.fetchone()
             
             if not char_info:
