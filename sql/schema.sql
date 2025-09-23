@@ -111,3 +111,63 @@ CREATE TABLE IF NOT EXISTS attribute_defs (
 );
 
 
+-- =============================
+-- ACTUALIZACIÓN DE TABLA ITEMS
+-- =============================
+ALTER TABLE items ADD COLUMN IF NOT EXISTS equipable BOOLEAN DEFAULT FALSE;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS attack TEXT;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS defense TEXT;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS max_uses INTEGER DEFAULT 0;
+
+-- =============================
+-- ACTUALIZACIÓN DE TABLA INVENTARIO
+-- =============================
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS current_uses INTEGER;
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS equipped_slot TEXT;
+
+-- =============================
+-- TABLA DE RANURAS DE EQUIPAMIENTO
+-- =============================
+CREATE TABLE IF NOT EXISTS equipment_slots (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    slot_limit INTEGER DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (guild_id, name)
+);
+
+-- =============================
+-- TABLA DE LÍMITES DE INVENTARIO
+-- =============================
+CREATE TABLE IF NOT EXISTS inventory_limits (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL UNIQUE,
+    general_limit INTEGER DEFAULT 100,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- =============================
+-- ACTUALIZACIÓN DE PERSONAJES - ATRIBUTOS BASE
+-- =============================
+-- Asegurarse de que los atributos base existan para todos los personajes
+UPDATE characters 
+SET attributes = jsonb_set(
+    COALESCE(attributes, '{}'::jsonb), 
+    '{ataque_base}', '5', true
+)
+WHERE attributes IS NULL OR NOT attributes ? 'ataque_base';
+
+UPDATE characters 
+SET attributes = jsonb_set(
+    attributes, 
+    '{defensa_base}', '5', true
+)
+WHERE NOT attributes ? 'defensa_base';
+
+UPDATE characters 
+SET attributes = jsonb_set(
+    attributes, 
+    '{agilidad_base}', '5', true
+)
+WHERE NOT attributes ? 'agilidad_base';

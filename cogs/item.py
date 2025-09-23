@@ -15,19 +15,45 @@ class Items(commands.Cog):
 
     def _parse_json_field(self, field_str):
         """Convierte una cadena en formato clave:valor a JSON válido"""
-        if not field_str:
+        if not field_str or field_str.strip() == "":
+            return {}
+        
+        field_str = field_str.strip()
+        if field_str in ["", "null", "undefined"]:
             return {}
         
         try:
-            return json.loads(field_str)
+            parsed = json.loads(field_str)
+            if isinstance(parsed, dict):
+                return parsed
+            else:
+                return {"descripción": str(parsed)}
         except json.JSONDecodeError:
             result = {}
-            pairs = field_str.split(',')
+            pairs = [pair.strip() for pair in field_str.split(',') if pair.strip()]
+            
             for pair in pairs:
                 if ':' in pair:
                     key, value = pair.split(':', 1)
-                    result[key.strip()] = value.strip()
-            return result
+                    key = key.strip()
+                    value = value.strip()
+                    
+                    try:
+                        if '.' in value:
+                            value = float(value)
+                        else:
+                            value = int(value)
+                    except ValueError:
+                        pass
+                    
+                    result[key] = value
+                else:
+                    if "descripción" not in result:
+                        result["descripción"] = pair
+                    else:
+                        result["descripción"] += f", {pair}"
+            
+            return result if result else {"descripción": field_str}
 
     def _safe_json_load(self, data):
         """Carga JSON de forma segura, manejando diferentes tipos de entrada"""
@@ -50,7 +76,10 @@ class Items(commands.Cog):
         descripcion="Descripción del item (opcional)",
         imagen="URL de la imagen del item (opcional)",
         efectos="Efectos en formato clave:valor (ej: fuerza:2,agilidad:1) (opcional)",
-        usos="Usos en formato clave:valor (opcional)",
+        max_usos="Número máximo de usos (0 = ilimitado) (opcional)",
+        equipable="¿Es equipable? (si/no) (opcional)",
+        ataque="Dados de ataque (ej: 1d6+2) (opcional)",
+        defensa="Dados de defensa (ej: 1d4+1) (opcional)",
         craft="Componentes de crafteo: item1*2,item2*3 (opcional)",
         decompose="Componentes de descomposición: item1*1,item2*2 (opcional)"
     )
@@ -62,14 +91,19 @@ class Items(commands.Cog):
         descripcion: str = None,
         imagen: str = None,
         efectos: str = None,
-        usos: str = None,
+        max_usos: int = 0,
+        equipable: str = "no",
+        ataque: str = None,
+        defensa: str = None,
         craft: str = None,
         decompose: str = None
     ):
         cur = self.conn.cursor()
         try:
             efectos_json = self._parse_json_field(efectos) or {}
-            usos_json = self._parse_json_field(usos) or {}
+            
+            # Convertir equipable a booleano
+            equipable_bool = equipable.lower() in ['sí', 'si', 's', 'yes', 'y', 'true', '1']
             
             craft_json = await self._parse_receta_field(craft, cur) or []
             decompose_json = await self._parse_receta_field(decompose, cur) or []
@@ -78,8 +112,8 @@ class Items(commands.Cog):
             print(f"Guardando decompose: {decompose_json}")
 
             cur.execute("""
-                INSERT INTO items (name, category, description, image, effects, uses, craft, decompose)
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
+                INSERT INTO items (name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose)
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
                 RETURNING id
             """, (
                 nombre, 
@@ -87,7 +121,10 @@ class Items(commands.Cog):
                 descripcion, 
                 imagen,
                 json.dumps(efectos_json), 
-                json.dumps(usos_json), 
+                max_usos,
+                equipable_bool,
+                ataque,
+                defensa,
                 json.dumps(craft_json), 
                 json.dumps(decompose_json)
             ))
@@ -97,6 +134,10 @@ class Items(commands.Cog):
             
             await interaction.response.send_message(
                 f"Item **{nombre}** creado con éxito (ID: {item_id}).\n"
+                f"Equipable: {'Sí' if equipable_bool else 'No'}\n"
+                f"Usos máximos: {max_usos if max_usos > 0 else 'Ilimitados'}\n"
+                f"Ataque: {ataque or 'No'}\n"
+                f"Defensa: {defensa or 'No'}\n"
                 f"Craft: {len(craft_json)} componentes\n"
                 f"Decompose: {len(decompose_json)} componentes", 
                 ephemeral=True
@@ -144,7 +185,7 @@ class Items(commands.Cog):
         try:
             cur = self.conn.cursor()
             cur.execute("""
-                SELECT id, name, category, description, image, effects, uses, craft, decompose, created_at
+                SELECT id, name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose, created_at
                 FROM items WHERE name=%s
             """, (nombre,))
             row = cur.fetchone()
@@ -154,10 +195,9 @@ class Items(commands.Cog):
                 cur.close()
                 return
 
-            item_id, name, category, description, image, effects, uses, craft, decompose, created_at = row
+            (item_id, name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose, created_at) = row
 
             effects_dict = self._safe_json_load(effects)
-            uses_dict = self._safe_json_load(uses)
             craft_data = self._safe_json_load(craft)
             decompose_data = self._safe_json_load(decompose)
 
@@ -168,23 +208,29 @@ class Items(commands.Cog):
             )
             
             if image:
-                embed.set_image(url=image)
+                embed.set_thumbnail(url=image)
                 
             embed.add_field(name="Categoría", value=category or "Ninguna", inline=True)
             embed.add_field(name="Creado el", value=str(created_at.date()), inline=True)
-
+            embed.add_field(name="Equipable", value="Sí" if equipable else "No", inline=True)
+            embed.add_field(name="Usos máximos", value=f"{max_uses} usos" if max_uses > 0 else "Ilimitados", inline=True)
+            
+            if attack:
+                embed.add_field(name="Ataque", value=attack, inline=True)
+            if defense:
+                embed.add_field(name="Defensa", value=defense, inline=True)
 
             if effects_dict:
-                efectos_str = "\n".join([f"**{k}**: {v}" for k, v in effects_dict.items()])
-                embed.add_field(name="Efectos", value=efectos_str, inline=False)
+                if isinstance(effects_dict, dict):
+                    if len(effects_dict) == 1 and "descripción" in effects_dict:
+                        efectos_str = effects_dict["descripción"]
+                    else:
+                        efectos_str = "\n".join([f"**{k}**: {v}" for k, v in effects_dict.items()])
+                    embed.add_field(name="Efectos", value=efectos_str, inline=False)
+                else:
+                    embed.add_field(name="Efectos", value=str(effects_dict), inline=False)
             else:
-                embed.add_field(name="Efectos", value="No tiene efectos", inline=False)
-                
-            if uses_dict:
-                usos_str = "\n".join([f"**{k}**: {v}" for k, v in uses_dict.items()])
-                embed.add_field(name="Usos", value=usos_str, inline=False)
-            else:
-                embed.add_field(name="Usos", value="No tiene usos definidos", inline=False)
+                embed.add_field(name="Efectos", value="No tiene efectos definidos", inline=False)
 
             craft_str = await self._formatear_receta(craft_data, "craft", cur)
             if craft_str:
@@ -198,15 +244,15 @@ class Items(commands.Cog):
                     if recipe_str:
                         embed.add_field(name="Receta de Crafteo (Sistema)", value=recipe_str, inline=False)
                     else:
-                        embed.add_field(name="Receta de Crafteo", value="No se puede craftear", inline=False)
+                        embed.add_field(name="Crafteo", value="No se puede craftear", inline=False)
                 else:
-                    embed.add_field(name="Receta de Crafteo", value="No se puede craftear", inline=False)
+                    embed.add_field(name="Crafteo", value="No se puede craftear", inline=False)
 
             decompose_str = await self._formatear_receta(decompose_data, "decompose", cur)
             if decompose_str:
                 embed.add_field(name="Descompone en", value=decompose_str, inline=False)
             else:
-                embed.add_field(name="Descompone en", value="No se puede descomponer", inline=False)
+                embed.add_field(name="Descomposición", value="No se puede descomponer", inline=False)
 
             cur.close()
             await interaction.response.send_message(embed=embed)
@@ -229,7 +275,6 @@ class Items(commands.Cog):
                     item_name = comp.get('item_name')
                     qty = comp.get('qty', 1)
                     
-                    # Buscar el nombre del item si tenemos ID
                     if item_id:
                         cur.execute("SELECT name FROM items WHERE id=%s", (item_id,))
                         item_row = cur.fetchone()
@@ -311,7 +356,7 @@ class Items(commands.Cog):
         try:
             cur = self.conn.cursor()
             cur.execute("""
-                SELECT id, name, craft, decompose, effects, uses
+                SELECT id, name, category, description, effects, max_uses, equipable, attack, defense, craft, decompose
                 FROM items WHERE name=%s
             """, (nombre,))
             row = cur.fetchone()
@@ -320,17 +365,27 @@ class Items(commands.Cog):
                 await interaction.response.send_message("Item no encontrado.", ephemeral=True)
                 return
 
-            item_id, name, craft, decompose, effects, uses = row
+            (item_id, name, category, description, effects, max_uses, equipable, attack, defense, craft, decompose) = row
             
-            # Mostrar datos crudos
-            embed = discord.Embed(title=f"Debug: {name}", color=discord.Color.blue())
+            embed = discord.Embed(title=f"Debug: {name}", color=discord.Color.dark_gold())
+            
             embed.add_field(name="ID", value=item_id, inline=True)
-            embed.add_field(name="Craft (crudo)", value=f"`{craft}`", inline=False)
-            embed.add_field(name="Decompose (crudo)", value=f"`{decompose}`", inline=False)
-            embed.add_field(name="Effects (crudo)", value=f"`{effects}`", inline=False)
-            embed.add_field(name="Uses (crudo)", value=f"`{uses}`", inline=False)
+            embed.add_field(name="Categoría", value=category or "Ninguna", inline=True)
+            embed.add_field(name="Descripción", value=description or "Ninguna", inline=True)
             
-            # Mostrar datos parseados
+            # Efectos
+            embed.add_field(name="Effects (crudo)", value=f"`{effects}`", inline=False)
+            effects_parsed = self._safe_json_load(effects) or {}
+            embed.add_field(name="Effects (parseado)", value=f"`{effects_parsed}`", inline=False)
+            embed.add_field(name="Tipo Effects", value=str(type(effects_parsed)), inline=True)
+            
+            # Nuevos campos
+            embed.add_field(name="Max Uses", value=max_uses, inline=True)
+            embed.add_field(name="Equipable", value=equipable, inline=True)
+            embed.add_field(name="Attack", value=attack or "N/A", inline=True)
+            embed.add_field(name="Defense", value=defense or "N/A", inline=True)
+            
+            # Craft y Decompose
             craft_parsed = self._safe_json_load(craft)
             decompose_parsed = self._safe_json_load(decompose)
             
