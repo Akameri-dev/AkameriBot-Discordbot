@@ -32,15 +32,15 @@ class Items(commands.Cog):
     def _safe_json_load(self, data):
         """Carga JSON de forma segura, manejando diferentes tipos de entrada"""
         if data is None:
-            return {}
-        if isinstance(data, dict):
+            return None
+        if isinstance(data, (dict, list)):
             return data
         if isinstance(data, str):
             try:
                 return json.loads(data)
             except json.JSONDecodeError:
-                return {}
-        return {}
+                return None
+        return None
 
     @item.command(name="crear", description="Crea un nuevo item global en el servidor (solo admins)")
     @app_commands.checks.has_permissions(administrator=True)
@@ -68,16 +68,19 @@ class Items(commands.Cog):
     ):
         cur = self.conn.cursor()
         try:
-            efectos_json = self._parse_json_field(efectos)
-            usos_json = self._parse_json_field(usos)
+            efectos_json = self._parse_json_field(efectos) or {}
+            usos_json = self._parse_json_field(usos) or {}
             
+            craft_json = await self._parse_receta_field(craft, cur) or []
+            decompose_json = await self._parse_receta_field(decompose, cur) or []
 
-            craft_json = await self._parse_receta_field(craft, cur)
-            decompose_json = await self._parse_receta_field(decompose, cur)
+            print(f"Guardando craft: {craft_json}")
+            print(f"Guardando decompose: {decompose_json}")
 
             cur.execute("""
                 INSERT INTO items (name, category, description, image, effects, uses, craft, decompose)
                 VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb)
+                RETURNING id
             """, (
                 nombre, 
                 categoria, 
@@ -88,8 +91,16 @@ class Items(commands.Cog):
                 json.dumps(craft_json), 
                 json.dumps(decompose_json)
             ))
+            
+            item_id = cur.fetchone()[0]
             self.conn.commit()
-            await interaction.response.send_message(f"Item **{nombre}** creado con éxito.", ephemeral=True)
+            
+            await interaction.response.send_message(
+                f"Item **{nombre}** creado con éxito (ID: {item_id}).\n"
+                f"Craft: {len(craft_json)} componentes\n"
+                f"Decompose: {len(decompose_json)} componentes", 
+                ephemeral=True
+            )
         except Exception as e:
             await interaction.response.send_message(f"No se pudo crear el ítem: {str(e)}", ephemeral=True)
         finally:
@@ -177,7 +188,7 @@ class Items(commands.Cog):
 
             craft_str = await self._formatear_receta(craft_data, "craft", cur)
             if craft_str:
-                embed.add_field(name="🛠️ Receta de Crafteo", value=craft_str, inline=False)
+                embed.add_field(name="Receta de Crafteo", value=craft_str, inline=False)
             else:
                 cur.execute("SELECT components FROM recipes WHERE result_item_id=%s", (item_id,))
                 recipe_row = cur.fetchone()
@@ -185,11 +196,11 @@ class Items(commands.Cog):
                     recipe_components = self._safe_json_load(recipe_row[0])
                     recipe_str = await self._formatear_receta(recipe_components, "recipe", cur)
                     if recipe_str:
-                        embed.add_field(name="🛠️ Receta de Crafteo (Sistema)", value=recipe_str, inline=False)
+                        embed.add_field(name="Receta de Crafteo (Sistema)", value=recipe_str, inline=False)
                     else:
-                        embed.add_field(name="🛠️ Receta de Crafteo", value="No se puede craftear", inline=False)
+                        embed.add_field(name="Receta de Crafteo", value="No se puede craftear", inline=False)
                 else:
-                    embed.add_field(name="🛠️ Receta de Crafteo", value="No se puede craftear", inline=False)
+                    embed.add_field(name="Receta de Crafteo", value="No se puede craftear", inline=False)
 
             decompose_str = await self._formatear_receta(decompose_data, "decompose", cur)
             if decompose_str:
@@ -210,27 +221,31 @@ class Items(commands.Cog):
             return None
         
         try:
+            componentes = []
+            
             if isinstance(data, list):
-                componentes = []
                 for comp in data:
                     item_id = comp.get('item_id')
+                    item_name = comp.get('item_name')
                     qty = comp.get('qty', 1)
+                    
+                    # Buscar el nombre del item si tenemos ID
                     if item_id:
                         cur.execute("SELECT name FROM items WHERE id=%s", (item_id,))
                         item_row = cur.fetchone()
                         if item_row:
-                            componentes.append(f"**{item_row[0]}** x{qty}")
+                            componentes.append(f"• **{item_row[0]}** x{qty}")
                         else:
-                            componentes.append(f"Item ID {item_id} x{qty}")
-                return "\n".join(componentes) if componentes else None
-            
+                            componentes.append(f"• Item ID {item_id} x{qty}")
+                    elif item_name:
+                        componentes.append(f"• **{item_name}** x{qty}")
+                    
             elif isinstance(data, dict):
-                componentes = []
                 for item_name, qty in data.items():
-                    componentes.append(f"**{item_name}** x{qty}")
-                return "\n".join(componentes) if componentes else None
+                    componentes.append(f"• **{item_name}** x{qty}")
             
-            return str(data)
+            return "\n".join(componentes) if componentes else None
+            
         except Exception as e:
             print(f"Error formateando {tipo}: {e}")
             return None
@@ -288,6 +303,45 @@ class Items(commands.Cog):
             await interaction.response.send_message(f"Error al eliminar el item: {str(e)}", ephemeral=True)
         finally:
             cur.close()
+    
+    @item.command(name="debug", description="Muestra información de debug de un item")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def debug_item(self, interaction: discord.Interaction, nombre: str):
+        """Comando para diagnosticar problemas con los items"""
+        try:
+            cur = self.conn.cursor()
+            cur.execute("""
+                SELECT id, name, craft, decompose, effects, uses
+                FROM items WHERE name=%s
+            """, (nombre,))
+            row = cur.fetchone()
+
+            if not row:
+                await interaction.response.send_message("Item no encontrado.", ephemeral=True)
+                return
+
+            item_id, name, craft, decompose, effects, uses = row
+            
+            # Mostrar datos crudos
+            embed = discord.Embed(title=f"Debug: {name}", color=discord.Color.blue())
+            embed.add_field(name="ID", value=item_id, inline=True)
+            embed.add_field(name="Craft (crudo)", value=f"`{craft}`", inline=False)
+            embed.add_field(name="Decompose (crudo)", value=f"`{decompose}`", inline=False)
+            embed.add_field(name="Effects (crudo)", value=f"`{effects}`", inline=False)
+            embed.add_field(name="Uses (crudo)", value=f"`{uses}`", inline=False)
+            
+            # Mostrar datos parseados
+            craft_parsed = self._safe_json_load(craft)
+            decompose_parsed = self._safe_json_load(decompose)
+            
+            embed.add_field(name="Craft (parseado)", value=f"`{craft_parsed}`", inline=False)
+            embed.add_field(name="Decompose (parseado)", value=f"`{decompose_parsed}`", inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            cur.close()
+        
+        except Exception as e:
+            await interaction.response.send_message(f"Error en debug: {e}", ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Items(bot))
