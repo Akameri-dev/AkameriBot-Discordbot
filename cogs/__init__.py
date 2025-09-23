@@ -5,3 +5,4 @@ from .inventario import Inventario
 from .item import Items
 from .market import Market
 from .personajes import Personajes
+from .combate import Combate

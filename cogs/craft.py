@@ -156,65 +156,90 @@ class Craft(commands.Cog):
     @craft.command(name="usar", description="Intenta craftear un objeto")
     async def craftear(self, interaction: discord.Interaction, personaje: str, objeto: str):
         cur = self.conn.cursor()
+        try:
+            # Verificar personaje
+            cur.execute("SELECT id FROM characters WHERE guild_id=%s AND name=%s", (str(interaction.guild.id), personaje))
+            pj = cur.fetchone()
+            if not pj:
+                await interaction.response.send_message("Ese personaje no existe.", ephemeral=True)
+                cur.close()
+                return
+            char_id = pj[0]
 
+            # Verificar objeto
+            cur.execute("SELECT id FROM items WHERE name=%s", (objeto,))
+            row = cur.fetchone()
+            if not row:
+                await interaction.response.send_message("Ese objeto no existe.", ephemeral=True)
+                cur.close()
+                return
+            result_item_id = row[0]
 
-        cur.execute("SELECT id FROM characters WHERE guild_id=%s AND name=%s", (str(interaction.guild.id), personaje))
-        pj = cur.fetchone()
-        if not pj:
-            await interaction.response.send_message("Ese personaje no existe.", ephemeral=True)
-            cur.close()
-            return
-        char_id = pj[0]
-
-
-        cur.execute("SELECT id FROM items WHERE name=%s", (objeto,))
-        row = cur.fetchone()
-        if not row:
-            await interaction.response.send_message("Ese objeto no existe.", ephemeral=True)
-            cur.close()
-            return
-        result_item_id = row[0]
-
-        # obtener receta
-        cur.execute("SELECT components FROM recipes WHERE result_item_id=%s", (result_item_id,))
-        rec = cur.fetchone()
-        if not rec:
-            await interaction.response.send_message("Ese objeto no tiene receta.", ephemeral=True)
-            cur.close()
-            return
-
-        components = rec[0]
-
-
-        for comp in components:
-            cur.execute("SELECT quantity FROM inventory WHERE character_id=%s AND item_id=%s",
-                        (char_id, comp["item_id"]))
-            inv = cur.fetchone()
-            if not inv or inv[0] < comp["qty"]:
-                await interaction.response.send_message("No tienes todos los materiales necesarios.", ephemeral=True)
+            # Obtener receta
+            cur.execute("SELECT components FROM recipes WHERE result_item_id=%s", (result_item_id,))
+            rec = cur.fetchone()
+            if not rec:
+                await interaction.response.send_message("Ese objeto no tiene receta.", ephemeral=True)
                 cur.close()
                 return
 
+            components = rec[0]
 
-        for comp in components:
-            cur.execute("""
-                UPDATE inventory
-                SET quantity = quantity - %s
-                WHERE character_id=%s AND item_id=%s
-            """, (comp["qty"], char_id, comp["item_id"]))
+            # Verificar materiales
+            for comp in components:
+                cur.execute("SELECT quantity FROM inventory WHERE character_id=%s AND item_id=%s",
+                            (char_id, comp["item_id"]))
+                inv = cur.fetchone()
+                if not inv or inv[0] < comp["qty"]:
+                    await interaction.response.send_message("No tienes todos los materiales necesarios.", ephemeral=True)
+                    cur.close()
+                    return
 
-        # agregar objeto final
-        cur.execute("""
-            INSERT INTO inventory (character_id, item_id, quantity)
-            VALUES (%s, %s, 1)
-            ON CONFLICT (character_id, item_id)
-            DO UPDATE SET quantity = inventory.quantity + 1
-        """, (char_id, result_item_id))
+            # Consumir materiales
+            for comp in components:
+                cur.execute("""
+                    UPDATE inventory
+                    SET quantity = quantity - %s
+                    WHERE character_id=%s AND item_id=%s
+                """, (comp["qty"], char_id, comp["item_id"]))
 
-        self.conn.commit()
-        cur.close()
+            # Eliminar items con cantidad 0
+            cur.execute("DELETE FROM inventory WHERE character_id=%s AND quantity <= 0", (char_id,))
 
-        await interaction.response.send_message(f"Has crafteado **{objeto}** con éxito.", ephemeral=True)
+            # Obtener información del item resultante (para max_uses)
+            cur.execute("SELECT max_uses FROM items WHERE id=%s", (result_item_id,))
+            item_info = cur.fetchone()
+            max_uses = item_info[0] if item_info else 0
+
+            # Agregar objeto final con current_uses si corresponde
+            if max_uses > 0:
+                cur.execute("""
+                    INSERT INTO inventory (character_id, item_id, quantity, current_uses)
+                    VALUES (%s, %s, 1, %s)
+                    ON CONFLICT (character_id, item_id)
+                    DO UPDATE SET 
+                        quantity = inventory.quantity + EXCLUDED.quantity,
+                        current_uses = CASE 
+                            WHEN inventory.current_uses IS NULL THEN EXCLUDED.current_uses
+                            ELSE inventory.current_uses
+                        END
+                """, (char_id, result_item_id, max_uses))
+            else:
+                cur.execute("""
+                    INSERT INTO inventory (character_id, item_id, quantity)
+                    VALUES (%s, %s, 1)
+                    ON CONFLICT (character_id, item_id)
+                    DO UPDATE SET quantity = inventory.quantity + EXCLUDED.quantity
+                """, (char_id, result_item_id))
+
+            self.conn.commit()
+            cur.close()
+
+            await interaction.response.send_message(f"Has crafteado **{objeto}** con éxito.", ephemeral=True)
+
+        except Exception as e:
+            await interaction.response.send_message(f"Error al craftear: {str(e)}", ephemeral=True)
+            cur.close()
 
     @decomp.command(name="usar", description="Descompone un objeto en otros")
     async def descomponer(self, interaction: discord.Interaction, personaje: str, objeto: str):
