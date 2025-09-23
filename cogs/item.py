@@ -19,10 +19,8 @@ class Items(commands.Cog):
             return {}
         
         try:
-
             return json.loads(field_str)
         except json.JSONDecodeError:
-
             result = {}
             pairs = field_str.split(',')
             for pair in pairs:
@@ -30,6 +28,19 @@ class Items(commands.Cog):
                     key, value = pair.split(':', 1)
                     result[key.strip()] = value.strip()
             return result
+
+    def _safe_json_load(self, data):
+        """Carga JSON de forma segura, manejando diferentes tipos de entrada"""
+        if data is None:
+            return {}
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, str):
+            try:
+                return json.loads(data)
+            except json.JSONDecodeError:
+                return {}
+        return {}
 
     @item.command(name="crear", description="Crea un nuevo ítem global en el servidor (solo admins)")
     @app_commands.checks.has_permissions(administrator=True)
@@ -57,7 +68,6 @@ class Items(commands.Cog):
     ):
         cur = self.conn.cursor()
         try:
-
             efectos_json = self._parse_json_field(efectos)
             usos_json = self._parse_json_field(usos)
             craft_json = self._parse_json_field(craft)
@@ -85,79 +95,93 @@ class Items(commands.Cog):
 
     @item.command(name="ver", description="Muestra la información de un ítem")
     async def ver_item(self, interaction: discord.Interaction, nombre: str):
-        cur = self.conn.cursor()
-        cur.execute("""
-            SELECT name, category, description, image, effects, uses, craft, decompose, created_at
-            FROM items WHERE name=%s
-        """, (nombre,))
-        row = cur.fetchone()
-        cur.close()
+        try:
+            cur = self.conn.cursor()
+            cur.execute("""
+                SELECT name, category, description, image, effects, uses, craft, decompose, created_at
+                FROM items WHERE name=%s
+            """, (nombre,))
+            row = cur.fetchone()
+            cur.close()
 
-        if not row:
-            await interaction.response.send_message("No encontré ese ítem.", ephemeral=True)
-            return
+            if not row:
+                await interaction.response.send_message("No encontré ese ítem.", ephemeral=True)
+                return
 
-        name, category, description, image, effects, uses, craft, decompose, created_at = row
+            name, category, description, image, effects, uses, craft, decompose, created_at = row
 
-        embed = discord.Embed(
-            title=f"Ítem: {name}", 
-            description=description or "Sin descripción.",
-            color=discord.Color.green()
-        )
-        
-        if image:
-            embed.set_image(url=image)
+            # Procesar campos JSON de forma segura
+            effects_dict = self._safe_json_load(effects)
+            uses_dict = self._safe_json_load(uses)
+            craft_dict = self._safe_json_load(craft)
+            decompose_dict = self._safe_json_load(decompose)
+
+            embed = discord.Embed(
+                title=f"Ítem: {name}", 
+                description=description or "Sin descripción.",
+                color=discord.Color.green()
+            )
             
-        embed.add_field(name="Categoría", value=category or "Ninguna", inline=True)
-        embed.add_field(name="Creado el", value=str(created_at.date()), inline=True)
+            if image:
+                embed.set_image(url=image)
+                
+            embed.add_field(name="Categoría", value=category or "Ninguna", inline=True)
+            embed.add_field(name="Creado el", value=str(created_at.date()), inline=True)
 
-        if effects and effects != {}:
-            efectos_str = "\n".join([f"{k}: {v}" for k, v in effects.items()])
-            embed.add_field(name="Efectos", value=efectos_str, inline=False)
-            
-        if uses and uses != {}:
-            usos_str = "\n".join([f"{k}: {v}" for k, v in uses.items()])
-            embed.add_field(name="Usos", value=usos_str, inline=False)
-            
-        if craft and craft != {}:
-            craft_str = "\n".join([f"{k}: {v}" for k, v in craft.items()])
-            embed.add_field(name="Receta", value=craft_str, inline=False)
-            
-        if decompose and decompose != {}:
-            decompose_str = "\n".join([f"{k}: {v}" for k, v in decompose.items()])
-            embed.add_field(name="Descompone en", value=decompose_str, inline=False)
+            if effects_dict:
+                efectos_str = "\n".join([f"**{k}**: {v}" for k, v in effects_dict.items()])
+                embed.add_field(name="✨ Efectos", value=efectos_str, inline=False)
+                
+            if uses_dict:
+                usos_str = "\n".join([f"**{k}**: {v}" for k, v in uses_dict.items()])
+                embed.add_field(name="🔄 Usos", value=usos_str, inline=False)
+                
+            if craft_dict:
+                craft_str = "\n".join([f"**{k}**: {v}" for k, v in craft_dict.items()])
+                embed.add_field(name="🔨 Receta de crafteo", value=craft_str, inline=False)
+                
+            if decompose_dict:
+                decompose_str = "\n".join([f"**{k}**: {v}" for k, v in decompose_dict.items()])
+                embed.add_field(name="♻️ Descompone en", value=decompose_str, inline=False)
 
-        await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed)
+            
+        except Exception as e:
+            print(f"Error en ver_item: {e}")  # Para debugging
+            await interaction.response.send_message("Ocurrió un error al mostrar el ítem.", ephemeral=True)
 
     @item.command(name="lista", description="Muestra todos los ítems del servidor")
     async def lista_items(self, interaction: discord.Interaction):
-        cur = self.conn.cursor()
-        cur.execute("SELECT name, category FROM items ORDER BY name ASC")
-        rows = cur.fetchall()
-        cur.close()
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT name, category FROM items ORDER BY name ASC")
+            rows = cur.fetchall()
+            cur.close()
 
-        if not rows:
-            await interaction.response.send_message("No hay ítems registrados aún.", ephemeral=True)
-            return
+            if not rows:
+                await interaction.response.send_message("No hay ítems registrados aún.", ephemeral=True)
+                return
 
-        embed = discord.Embed(title="Lista de Ítems", color=discord.Color.dark_gold())
-        
-    
-        categorias = {}
-        for name, category in rows:
-            cat = category or "Sin categoría"
-            if cat not in categorias:
-                categorias[cat] = []
-            categorias[cat].append(name)
-        
-        for categoria, items in categorias.items():
-            embed.add_field(
-                name=f"**{categoria}**",
-                value="\n".join([f"- {item}" for item in items]),
-                inline=False
-            )
+            embed = discord.Embed(title="Lista de Items", color=discord.Color.dark_gold())
+            
+            categorias = {}
+            for name, category in rows:
+                cat = category or "Sin categoría"
+                if cat not in categorias:
+                    categorias[cat] = []
+                categorias[cat].append(name)
+            
+            for categoria, items in categorias.items():
+                embed.add_field(
+                    name=f"**{categoria}**",
+                    value="\n".join([f"• {item}" for item in items]),
+                    inline=False
+                )
 
-        await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed)
+            
+        except Exception as e:
+            await interaction.response.send_message("Error al obtener la lista de ítems.", ephemeral=True)
 
     @item.command(name="eliminar", description="Elimina un ítem del servidor (solo admins)")
     @app_commands.checks.has_permissions(administrator=True)
@@ -165,13 +189,11 @@ class Items(commands.Cog):
     async def eliminar_item(self, interaction: discord.Interaction, nombre: str):
         cur = self.conn.cursor()
         try:
-        
             cur.execute("SELECT name FROM items WHERE name = %s", (nombre,))
             if not cur.fetchone():
                 await interaction.response.send_message("No existe un ítem con ese nombre.", ephemeral=True)
                 return
             
-
             cur.execute("DELETE FROM items WHERE name = %s", (nombre,))
             self.conn.commit()
             

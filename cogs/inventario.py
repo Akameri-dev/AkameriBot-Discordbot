@@ -30,7 +30,7 @@ class Inventario(commands.Cog):
             await interaction.response.send_message("Ese personaje no existe o no tiene inventario.", ephemeral=True)
             return
 
-        embed = discord.Embed(title=f"Inventario de {personaje}", color=discord.Color.gold())
+        embed = discord.Embed(title=f"Inventario de {personaje}", color=discord.Color.dark_gold())
         for _, item_name, qty, meta in rows:
             if not item_name: 
                 continue
