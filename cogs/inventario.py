@@ -18,67 +18,99 @@ class Inventario(commands.Cog):
     async def ver_inventario(self, interaction: discord.Interaction, personaje: str):
         cur = self.conn.cursor()
         try:
-            # Obtener información del personaje y su inventario
-            cur.execute("""
-                SELECT c.id, i.name, i.max_uses, i.equipable, inv.quantity, inv.current_uses, inv.equipped_slot
-                FROM characters c
-                LEFT JOIN inventory inv ON c.id = inv.character_id
-                LEFT JOIN items i ON inv.item_id = i.id
-                WHERE c.guild_id=%s AND c.name=%s AND inv.quantity > 0
-                ORDER BY i.name
-            """, (str(interaction.guild.id), personaje))
-            rows = cur.fetchall()
-
-            if not rows or not rows[0][0]:
-                await interaction.response.send_message("Ese personaje no existe o no tiene items en el inventario.", ephemeral=True)
+            # Obtener información del personaje
+            cur.execute("SELECT id FROM characters WHERE guild_id=%s AND name=%s", 
+                       (str(interaction.guild.id), personaje))
+            char_info = cur.fetchone()
+            
+            if not char_info:
+                await interaction.response.send_message("Ese personaje no existe.", ephemeral=True)
                 return
 
-            # Crear tabla en formato texto
-            table_header = "```\n"
-            table_header += "ITEM                 | CANT | USOS      | EQUIPADO\n"
-            table_header += "-" * 50 + "\n"
-            table_content = ""
+            char_id = char_info[0]
 
-            for _, item_name, max_uses, equipable, quantity, current_uses, equipped_slot in rows:
-                if not item_name:
-                    continue
+            # Obtener ranuras existentes
+            cur.execute("SELECT name FROM equipment_slots WHERE guild_id=%s ORDER BY name", 
+                       (str(interaction.guild.id),))
+            ranuras = [row[0] for row in cur.fetchall()]
 
-                # Formatear nombre (truncar si es muy largo)
-                item_display = item_name[:18] + ".." if len(item_name) > 20 else item_name.ljust(20)
-                
-                # Formatear cantidad
-                cant_display = str(quantity).ljust(4)
-                
-                # Formatear usos
-                if max_uses > 0 and current_uses is not None:
-                    usos_display = f"{current_uses}/{max_uses}".ljust(9)
-                else:
-                    usos_display = "Sin usos".ljust(9)
-                
-                # Formatear equipado
-                if equipped_slot:
-                    equip_display = equipped_slot[:8]
-                else:
-                    equip_display = "S/E"
-                
-                table_content += f"{item_display} | {cant_display} | {usos_display} | {equip_display}\n"
+            # Crear la estructura de la tabla
+            table_lines = []
+            table_lines.append("```")
+            table_lines.append("ITEM                 | CANT | USOS | RANURA")
+            table_lines.append("-" * 50)
 
-            table_footer = "```"
+            # Primero: items equipados organizados por ranura
+            for ranura in ranuras:
+                cur.execute("""
+                    SELECT i.name, inv.quantity, i.max_uses, inv.current_uses
+                    FROM inventory inv
+                    JOIN items i ON inv.item_id = i.id
+                    WHERE inv.character_id=%s AND inv.equipped_slot=%s AND inv.quantity > 0
+                    ORDER BY i.name
+                """, (char_id, ranura))
+                
+                items_ranura = cur.fetchall()
+                if items_ranura:
+                    table_lines.append(f"--- {ranura.upper()} ---")
+                    
+                    for name, quantity, max_uses, current_uses in items_ranura:
+                        # Formatear nombre
+                        name_display = name[:18] + ".." if len(name) > 20 else name.ljust(20)
+                        
+                        # Formatear cantidad
+                        cant_display = str(quantity).ljust(4)
+                        
+                        # Formatear usos
+                        if max_uses and max_uses > 0 and current_uses is not None:
+                            usos_display = f"{current_uses}/{max_uses}".ljust(5)
+                        else:
+                            usos_display = "S/U".ljust(5)  # Cambiado de "Sin usos" a "S/U"
+                        
+                        # Formatear ranura (abreviado)
+                        ranura_display = ranura[:6].ljust(6)
+                        
+                        table_lines.append(f"{name_display} | {cant_display} | {usos_display} | {ranura_display}")
+
+            # Segundo: inventario general (no equipado)
+            cur.execute("""
+                SELECT i.name, inv.quantity, i.max_uses, inv.current_uses
+                FROM inventory inv
+                JOIN items i ON inv.item_id = i.id
+                WHERE inv.character_id=%s AND inv.equipped_slot IS NULL AND inv.quantity > 0
+                ORDER BY i.name
+            """, (char_id,))
+            
+            items_general = cur.fetchall()
+            if items_general:
+                table_lines.append("--- INVENTARIO GENERAL ---")
+                
+                for name, quantity, max_uses, current_uses in items_general:
+                    name_display = name[:18] + ".." if len(name) > 20 else name.ljust(20)
+                    cant_display = str(quantity).ljust(4)
+                    
+                    if max_uses and max_uses > 0 and current_uses is not None:
+                        usos_display = f"{current_uses}/{max_uses}".ljust(5)
+                    else:
+                        usos_display = "S/U".ljust(5)
+                    
+                    ranura_display = "LIBRE".ljust(6)
+                    
+                    table_lines.append(f"{name_display} | {cant_display} | {usos_display} | {ranura_display}")
+
+            if len(table_lines) <= 3:
+                table_lines.append("El inventario está vacío")
+
+            table_lines.append("```")
 
             embed = discord.Embed(
                 title=f"Inventario de {personaje}", 
-                description=table_header + table_content + table_footer,
+                description="\n".join(table_lines),
                 color=discord.Color.dark_gold()
             )
 
             # Agregar imagen de la mochila
             embed.set_thumbnail(url="https://media.discordapp.net/attachments/1193596513469866094/1419918116367892490/1-removebg-preview.png?ex=68d3814b&is=68d22fcb&hm=521fea6d3f76825029a9d2e83865c2266493b3fa8a00ec785817cd061b3b9c6e&=&format=webp&quality=lossless")
-
-            # Obtener límite del inventario
-            cur.execute("SELECT general_limit FROM inventory_limits WHERE guild_id=%s", (str(interaction.guild.id),))
-            limit_row = cur.fetchone()
-            if limit_row:
-                embed.set_footer(text=f"Límite del inventario: {limit_row[0]} items")
 
             await interaction.response.send_message(embed=embed)
 

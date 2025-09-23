@@ -199,7 +199,7 @@ class Items(commands.Cog):
             decompose_data = self._safe_json_load(decompose)
 
             embed = discord.Embed(
-                title=f"Item: {name}", 
+                title=f"{name}", 
                 description=description or "Sin descripción.",
                 color=discord.Color.dark_gold()
             )

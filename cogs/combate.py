@@ -28,29 +28,10 @@ class Combate(commands.Cog):
             await interaction.response.send_message(f"Atributo no válido. Usa: {', '.join(atributos_validos)}", ephemeral=True)
             return
 
-        # Actualizar todos los personajes existentes que no tengan este atributo
-        cur = self.conn.cursor()
-        try:
-            cur.execute("""
-                UPDATE characters 
-                SET attributes = jsonb_set(
-                    COALESCE(attributes, '{}'::jsonb), 
-                    %s, 
-                    %s::text::jsonb,
-                    true
-                )
-                WHERE guild_id = %s AND NOT attributes ? %s
-            """, (f"{{{atributo}}}", str(valor), str(interaction.guild.id), atributo))
-            
-            self.conn.commit()
-            await interaction.response.send_message(
-                f"Atributo base **{atributo}** establecido en **{valor}** para todos los personajes nuevos.",
-                ephemeral=True
-            )
-        except Exception as e:
-            await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
-        finally:
-            cur.close()
+        await interaction.response.send_message(
+            f"Atributo base {atributo} establecido en {valor} para todos los personajes nuevos.",
+            ephemeral=True
+        )
 
     @atributo.command(name="modificar", description="Modifica un atributo de un personaje específico")
     @app_commands.describe(
@@ -76,7 +57,7 @@ class Combate(commands.Cog):
             
             if cur.rowcount > 0:
                 await interaction.response.send_message(
-                    f"Atributo **{atributo}** de **{personaje}** establecido en **{valor}**.",
+                    f"Atributo {atributo} de {personaje} establecido en {valor}.",
                     ephemeral=False
                 )
             else:
@@ -118,11 +99,11 @@ class Combate(commands.Cog):
                 return
 
             attributes = result[0] or {}
-            atributo_base = attributes.get(tipo, 5)  # Usar el nombre directamente (Ataque, Defensa, Agilidad)
+            atributo_base = attributes.get(tipo, 5)
             
-            # Buscar items equipados que modifiquen este atributo
+            # Buscar items equipados
             cur.execute("""
-                SELECT i.attack, i.defense, i.effects, inv.equipped_slot
+                SELECT i.effects, i.attack, i.defense, inv.equipped_slot
                 FROM inventory inv
                 JOIN items i ON inv.item_id = i.id
                 JOIN characters c ON inv.character_id = c.id
@@ -131,45 +112,42 @@ class Combate(commands.Cog):
             
             items_equipados = cur.fetchall()
             
-            # Valor base del atributo
-            valor_final = atributo_base
+            # Calcular modificadores
             modificadores = []
             dado_personalizado = None
-            
-            # Aplicar modificadores de items equipados
-            for attack, defense, effects, slot in items_equipados:
-                efectos_dict = self._safe_json_load(effects) or {}
-                
-                # Buscar efectos que modifiquen este atributo
-                for efecto, valor in efectos_dict.items():
-                    if tipo.lower() in efecto.lower():
-                        if isinstance(valor, (int, float)):
-                            valor_final += valor
-                            modificadores.append(f"{slot}: {efecto} {valor:+}")
-            
-            # Buscar dados personalizados del item equipado
-            for attack, defense, effects, slot in items_equipados:
-                if tipo == "Ataque" and attack:
-                    dado_personalizado = attack
-                    break
-                elif tipo == "Defensa" and defense:
-                    dado_personalizado = defense
-                    break
+            valor_final = atributo_base
 
-            # Determinar la expresión del dado a usar
+            for effects, attack, defense, slot in items_equipados:
+                # Efectos de atributos
+                if effects:
+                    efectos_dict = self._safe_json_load(effects) or {}
+                    for efecto, valor in efectos_dict.items():
+                        if tipo.lower() in efecto.lower():
+                            if isinstance(valor, (int, float)):
+                                valor_final += valor
+                                simbolo = "+" if valor > 0 else ""
+                                modificadores.append(f"{slot}: {efecto} {simbolo}{valor}")
+
+                # Dados personalizados
+                if tipo == "Ataque" and attack and not dado_personalizado:
+                    dado_personalizado = attack
+                elif tipo == "Defensa" and defense and not dado_personalizado:
+                    dado_personalizado = defense
+
+            # Determinar dado a usar
             if dado_personalizado:
                 dado_expresion = dado_personalizado
-                fuente_dado = f"Item equipado ({slot})"
+                fuente = "Arma equipada"
             else:
                 dado_expresion = f"1d{valor_final}"
-                fuente_dado = f"Atributo {tipo}"
+                fuente = f"Atributo {tipo}"
 
-            # Realizar tirada de dados
+            # Realizar tirada
             dados_cog = self.bot.get_cog('Dados')
             if dados_cog and hasattr(dados_cog, 'procesar_expresion'):
                 resultado, detalles, expandida = dados_cog.procesar_expresion(dado_expresion)
             else:
-                # Fallback: tirada simple
+                # Tirada simple
                 if 'd' in dado_expresion:
                     partes = dado_expresion.split('d')
                     cantidad = int(partes[0]) if partes[0] else 1
@@ -181,46 +159,21 @@ class Combate(commands.Cog):
                     resultado = int(dado_expresion)
                     detalles = f"Valor fijo: {resultado}"
 
-            # Crear embed organizado
+            # Crear embed serio
             embed = discord.Embed(
-                title=f"{tipo} - {personaje}",
+                title=f"Tirada de {tipo} - {personaje}",
                 color=discord.Color.dark_gold()
             )
             
-            # Información principal
-            embed.add_field(
-                name="Atributo Base", 
-                value=f"**{atributo_base}**", 
-                inline=True
-            )
+            embed.add_field(name="Dado utilizado", value=f"`{dado_expresion}`", inline=True)
+            embed.add_field(name="Fuente", value=fuente, inline=True)
+            embed.add_field(name="Resultado", value=f"**{resultado}**", inline=True)
             
-            embed.add_field(
-                name="Dado", 
-                value=f"`{dado_expresion}`\n*({fuente_dado})*", 
-                inline=True
-            )
-            
-            embed.add_field(
-                name="💥 Resultado", 
-                value=f"**{resultado}**", 
-                inline=True
-            )
-            
-            # Modificadores (si hay)
             if modificadores:
-                embed.add_field(
-                    name="Modificadores", 
-                    value="\n".join(modificadores), 
-                    inline=False
-                )
+                embed.add_field(name="Modificadores aplicados", value="\n".join(modificadores), inline=False)
             
-            # Detalles de la tirada
-            embed.add_field(
-                name="Detalles", 
-                value=f"```{detalles}```", 
-                inline=False
-            )
-            
+            embed.add_field(name="Detalles de la tirada", value=f"```{detalles}```", inline=False)
+
             await interaction.response.send_message(embed=embed)
                 
         except Exception as e:
@@ -229,7 +182,6 @@ class Combate(commands.Cog):
             cur.close()
 
     def _safe_json_load(self, data):
-        """Carga JSON de forma segura"""
         if data is None:
             return {}
         if isinstance(data, dict):
