@@ -1,6 +1,8 @@
+
+# webserver.py - Versión mejorada
 from flask import Flask 
-from threading import Thread
 import os
+import threading
 
 app = Flask('')
 
@@ -8,10 +10,19 @@ app = Flask('')
 def index():
     return 'Bot is alive!'
 
+@app.route('/health')
+def health():
+    return 'OK', 200
+
 def run():
     port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port)
+
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
 
 def keep_alive():
-    server = Thread(target=run)
+    server = threading.Thread(target=run)
+    server.daemon = True
     server.start()
+    
+    import time
+    time.sleep(2)
