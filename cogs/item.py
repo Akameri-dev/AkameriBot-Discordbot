@@ -108,9 +108,6 @@ class Items(commands.Cog):
             craft_json = await self._parse_receta_field(craft, cur) or []
             decompose_json = await self._parse_receta_field(decompose, cur) or []
 
-            print(f"Guardando craft: {craft_json}")
-            print(f"Guardando decompose: {decompose_json}")
-
             cur.execute("""
                 INSERT INTO items (name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose)
                 VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
@@ -185,7 +182,7 @@ class Items(commands.Cog):
         try:
             cur = self.conn.cursor()
             cur.execute("""
-                SELECT id, name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose, created_at
+                SELECT id, name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose
                 FROM items WHERE name=%s
             """, (nombre,))
             row = cur.fetchone()
@@ -195,7 +192,7 @@ class Items(commands.Cog):
                 cur.close()
                 return
 
-            (item_id, name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose, created_at) = row
+            (item_id, name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose) = row
 
             effects_dict = self._safe_json_load(effects)
             craft_data = self._safe_json_load(craft)
@@ -211,7 +208,6 @@ class Items(commands.Cog):
                 embed.set_thumbnail(url=image)
                 
             embed.add_field(name="Categoría", value=category or "Ninguna", inline=True)
-            embed.add_field(name="Creado el", value=str(created_at.date()), inline=True)
             embed.add_field(name="Equipable", value="Sí" if equipable else "No", inline=True)
             embed.add_field(name="Usos máximos", value=f"{max_uses} usos" if max_uses > 0 else "Ilimitados", inline=True)
             
@@ -367,7 +363,7 @@ class Items(commands.Cog):
 
             (item_id, name, category, description, effects, max_uses, equipable, attack, defense, craft, decompose) = row
             
-            embed = discord.Embed(title=f"Debug: {name}", color=discord.Color.dark_gold())
+            embed = discord.Embed(title=f"Debug: {name}", color=discord.Color.blue())
             
             embed.add_field(name="ID", value=item_id, inline=True)
             embed.add_field(name="Categoría", value=category or "Ninguna", inline=True)

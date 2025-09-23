@@ -171,3 +171,47 @@ SET attributes = jsonb_set(
     '{agilidad_base}', '5', true
 )
 WHERE NOT attributes ? 'agilidad_base';
+
+-- Eliminar constraints existentes
+ALTER TABLE inventory DROP CONSTRAINT IF EXISTS inventory_item_id_fkey;
+ALTER TABLE recipes DROP CONSTRAINT IF EXISTS recipes_result_item_id_fkey;
+ALTER TABLE decompositions DROP CONSTRAINT IF EXISTS decompositions_source_item_id_fkey;
+ALTER TABLE market_listings DROP CONSTRAINT IF EXISTS market_listings_item_id_fkey;
+
+-- Recrear constraints con CASCADE
+ALTER TABLE inventory ADD CONSTRAINT inventory_item_id_fkey 
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE;
+
+ALTER TABLE recipes ADD CONSTRAINT recipes_result_item_id_fkey 
+    FOREIGN KEY (result_item_id) REFERENCES items(id) ON DELETE CASCADE;
+
+ALTER TABLE decompositions ADD CONSTRAINT decompositions_source_item_id_fkey 
+    FOREIGN KEY (source_item_id) REFERENCES items(id) ON DELETE CASCADE;
+
+ALTER TABLE market_listings ADD CONSTRAINT market_listings_item_id_fkey 
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE;
+
+    -- Agregar columna para ranuras que no requieren items equipables
+ALTER TABLE equipment_slots ADD COLUMN IF NOT EXISTS requiere_equipable BOOLEAN DEFAULT FALSE;
+
+-- Actualizar atributos base de personajes
+UPDATE characters 
+SET attributes = jsonb_set(
+    COALESCE(attributes, '{}'::jsonb), 
+    '{"Ataque"}', '5', true
+)
+WHERE attributes IS NULL OR NOT attributes ? 'Ataque';
+
+UPDATE characters 
+SET attributes = jsonb_set(
+    attributes, 
+    '{"Defensa"}', '5', true
+)
+WHERE NOT attributes ? 'Defensa';
+
+UPDATE characters 
+SET attributes = jsonb_set(
+    attributes, 
+    '{"Agilidad"}', '5', true
+)
+WHERE NOT attributes ? 'Agilidad';
