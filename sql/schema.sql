@@ -215,3 +215,36 @@ SET attributes = jsonb_set(
     '{"Agilidad"}', '5', true
 )
 WHERE NOT attributes ? 'Agilidad';
+
+-- Agregar columnas para múltiples precios en el mercado
+ALTER TABLE market_listings 
+ADD COLUMN IF NOT EXISTS price2 JSONB,
+ADD COLUMN IF NOT EXISTS price3 JSONB;
+
+-- Actualizar los atributos base de los personajes (sin _base)
+UPDATE characters 
+SET attributes = jsonb_set(
+    COALESCE(attributes, '{}'::jsonb), 
+    '{"Ataque"}', '5', true
+)
+WHERE attributes IS NULL OR NOT attributes ? 'Ataque';
+
+UPDATE characters 
+SET attributes = jsonb_set(
+    attributes, 
+    '{"Defensa"}', '5', true
+)
+WHERE NOT attributes ? 'Defensa';
+
+UPDATE characters 
+SET attributes = jsonb_set(
+    attributes, 
+    '{"Agilidad"}', '5', true
+)
+WHERE NOT attributes ? 'Agilidad';
+
+ALTER TABLE market_listings 
+  ADD COLUMN IF NOT EXISTS price2 JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS initial_price2 JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS price3 JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS initial_price3 JSONB DEFAULT '[]'::jsonb;

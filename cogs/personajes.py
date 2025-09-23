@@ -13,93 +13,120 @@ class Personajes(commands.Cog):
 
     personaje = app_commands.Group(name="personaje", description="Gestión de personajes")
 
-    @personaje.command(name="registrar", description="Crea tu personaje en este servidor")
-    @app_commands.describe(
-        nombre="Nombre del personaje",
-        genero="Género del personaje",
-        edad="Edad del personaje",
-        imagen="URL de imagen para el personaje (opcional)",
-        historia="Historia del personaje (opcional)",
-        rasgos="Rasgos del personaje separados por comas (opcional)"
-    )
-    async def crear_personaje(self, interaction: discord.Interaction, nombre: str, genero: str = None, edad: int = None, 
-                             imagen: str = None, historia: str = None, rasgos: str = None):
-        cur = self.conn.cursor()
-
-        try:
-            # Convertir rasgos a lista JSON
-            rasgos_lista = []
-            if rasgos:
-                rasgos_lista = [r.strip() for r in rasgos.split(",") if r.strip()]
-            
-            cur.execute("""
-                INSERT INTO characters (user_id, guild_id, name, gender, age, image, lore, traits)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            """, (str(interaction.user.id), str(interaction.guild.id), nombre, genero, edad, imagen, historia, json.dumps(rasgos_lista)))
-            self.conn.commit()
-            await interaction.response.send_message(f"Personaje **{nombre}** creado con éxito.", ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message("No se pudo crear el personaje (¿ya existe?).", ephemeral=True)
-        finally:
-            cur.close()
-
     @personaje.command(name="ver", description="Muestra la ficha de un personaje")
     async def ver_personaje(self, interaction: discord.Interaction, nombre: str):
         cur = self.conn.cursor()
 
-        cur.execute("""
-            SELECT name, gender, age, attributes, traits, lore, image, approved, user_id
-            FROM characters
-            WHERE guild_id=%s AND name=%s
-        """, (str(interaction.guild.id), nombre))
-        row = cur.fetchone()
-        cur.close()
+        try:
+            # Obtener información básica del personaje
+            cur.execute("""
+                SELECT name, gender, age, attributes, traits, lore, image, approved, user_id, id
+                FROM characters
+                WHERE guild_id=%s AND name=%s
+            """, (str(interaction.guild.id), nombre))
+            row = cur.fetchone()
 
-        if not row:
-            await interaction.response.send_message("No encontré ese personaje.", ephemeral=True)
-            return
+            if not row:
+                await interaction.response.send_message("No encontré ese personaje.", ephemeral=True)
+                return
 
-        name, gender, age, attributes, traits, lore, image, approved, user_id = row
+            name, gender, age, attributes, traits, lore, image, approved, user_id, char_id = row
 
-        is_owner = str(interaction.user.id) == user_id
-        is_admin = interaction.user.guild_permissions.administrator
-        
-        if not approved and not is_owner and not is_admin:
-            await interaction.response.send_message("Este personaje aún no ha sido aprobado y solo puede ser visto por su dueño o administradores.", ephemeral=True)
-            return
-
-        embed = discord.Embed(title=f"{name}", description=lore or "", color=discord.Color.dark_gold())
-        embed.add_field(name="Género", value=gender or "No definido", inline=True)
-        embed.add_field(name="Edad", value=age or "Desconocida", inline=True)
-        
-        # Formatear atributos sin comillas
-        if attributes and attributes != {}:
-            atributos_str = "\n".join([f"**{k}**: {v}" for k, v in attributes.items()])
-            embed.add_field(name="Atributos", value=atributos_str, inline=False)
-        else:
-            embed.add_field(name="Atributos", value="Ninguno", inline=False)
-        
-        # Mostrar rasgos
-        if traits and len(traits) > 0:
-            rasgos_str = "\n".join([f"• {trait}" for trait in traits])
-            embed.add_field(name="Rasgos", value=rasgos_str, inline=False)
-        else:
-            embed.add_field(name="Rasgos", value="Ninguno", inline=False)
+            is_owner = str(interaction.user.id) == user_id
+            is_admin = interaction.user.guild_permissions.administrator
             
-        embed.add_field(name="Estado", value="✅ Aprobado" if approved else "⏳ Pendiente", inline=True)
-        
-        if image:
-            embed.set_image(url=image)
-            
-        if is_admin:
-            try:
-                owner = await interaction.guild.fetch_member(int(user_id))
-                owner_name = owner.display_name
-            except:
-                owner_name = f"Usuario con ID {user_id}"
-            embed.set_footer(text=f"Dueño: {owner_name}")
+            if not approved and not is_owner and not is_admin:
+                await interaction.response.send_message("Este personaje aún no ha sido aprobado y solo puede ser visto por su dueño o administradores.", ephemeral=True)
+                return
 
-        await interaction.response.send_message(embed=embed)
+            # Obtener items equipados y sus efectos
+            cur.execute("""
+                SELECT i.effects, i.attack, i.defense, inv.equipped_slot
+                FROM inventory inv
+                JOIN items i ON inv.item_id = i.id
+                WHERE inv.character_id=%s AND inv.equipped_slot IS NOT NULL
+            """, (char_id,))
+            
+            items_equipados = cur.fetchall()
+
+            # Procesar atributos base y bonificaciones
+            atributos_base = attributes or {}
+            bonificaciones = {}
+            items_activos = []
+
+            for effects, attack, defense, slot in items_equipados:
+                if effects:
+                    try:
+                        efectos_dict = json.loads(effects) if isinstance(effects, str) else effects
+                        for attr, valor in efectos_dict.items():
+                            if isinstance(valor, (int, float)):
+                                if attr not in bonificaciones:
+                                    bonificaciones[attr] = 0
+                                bonificaciones[attr] += valor
+                    except:
+                        pass
+                
+                # Registrar item activo
+                items_activos.append(slot)
+
+            # Crear embed
+            embed = discord.Embed(
+                title=f"{name}",
+                description=lore or "",
+                color=discord.Color.dark_gold()
+            )
+            
+            embed.add_field(name="Género", value=gender or "No definido", inline=True)
+            embed.add_field(name="Edad", value=age or "Desconocida", inline=True)
+            
+            # Atributos con bonificaciones
+            if atributos_base:
+                atributos_str = ""
+                for attr, valor_base in atributos_base.items():
+                    bono = bonificaciones.get(attr, 0)
+                    if bono != 0:
+                        valor_final = valor_base + bono
+                        simbolo = "+" if bono > 0 else ""
+                        atributos_str += f"**{attr}**: {valor_base} ({simbolo}{bono}) = {valor_final}\n"
+                    else:
+                        atributos_str += f"**{attr}**: {valor_base}\n"
+                
+                embed.add_field(name="Atributos", value=atributos_str, inline=False)
+            else:
+                embed.add_field(name="Atributos", value="Ninguno", inline=False)
+            
+            # Items equipados
+            if items_activos:
+                embed.add_field(name="Equipado en", value=", ".join(items_activos), inline=True)
+            else:
+                embed.add_field(name="Equipado", value="Nada", inline=True)
+            
+            # Rasgos
+            if traits and len(traits) > 0:
+                rasgos_str = "\n".join([f"• {trait}" for trait in traits])
+                embed.add_field(name="Rasgos", value=rasgos_str, inline=False)
+            else:
+                embed.add_field(name="Rasgos", value="Ninguno", inline=False)
+                
+            embed.add_field(name="Estado", value="Aprobado" if approved else "Pendiente", inline=True)
+            
+            if image:
+                embed.set_image(url=image)
+                
+            if is_admin:
+                try:
+                    owner = await interaction.guild.fetch_member(int(user_id))
+                    owner_name = owner.display_name
+                except:
+                    owner_name = f"Usuario con ID {user_id}"
+                embed.set_footer(text=f"Dueño: {owner_name}")
+
+            await interaction.response.send_message(embed=embed)
+            
+        except Exception as e:
+            await interaction.response.send_message(f"Error al mostrar el personaje: {str(e)}", ephemeral=True)
+        finally:
+            cur.close()
     
     @personaje.command(name="agregar_rasgo", description="Agrega rasgos a un personaje (solo admins)")
     @app_commands.checks.has_permissions(administrator=True)
