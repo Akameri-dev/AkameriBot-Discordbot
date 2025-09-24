@@ -313,12 +313,13 @@ class Market(commands.Cog):
                 await interaction.response.send_message(embed=embed)
                 return
 
-            # Crear tabla en formato texto
+            # Crear tabla mejorada con todos los precios
             table_lines = []
             table_lines.append("```")
             table_lines.append("ITEM                 | STOCK | PRECIO 1")
             table_lines.append("-" * 50)
 
+            # Primera pasada: mostrar solo precio principal en la tabla principal
             for name, price1, price2, price3, stock in items:
                 # Formatear nombre
                 name_display = name[:18] + ".." if len(name) > 20 else name.ljust(20)
@@ -343,27 +344,29 @@ class Market(commands.Cog):
                 color=discord.Color.dark_gold()
             )
 
-            # Agregar precios alternativos como fields separados
+            # Segunda pasada: agregar precios alternativos SOLO si existen, en fields organizados
+            alternative_prices_exist = False
+            alternative_fields = []
+            
             for name, price1, price2, price3, stock in items:
-                has_alternative_prices = False
                 price2_display = self._format_price_for_display(price2, cur) if price2 and price2 != '[]' else None
                 price3_display = self._format_price_for_display(price3, cur) if price3 and price3 != '[]' else None
                 
                 if price2_display and price2_display != "N/A":
-                    embed.add_field(
-                        name=f"{name} - Precio 2",
-                        value=price2_display,
-                        inline=True
-                    )
-                    has_alternative_prices = True
+                    alternative_prices_exist = True
+                    alternative_fields.append(f"**{name} - Precio 2:** {price2_display}")
                 
                 if price3_display and price3_display != "N/A":
-                    embed.add_field(
-                        name=f"{name} - Precio 3", 
-                        value=price3_display,
-                        inline=True
-                    )
-                    has_alternative_prices = True
+                    alternative_prices_exist = True
+                    alternative_fields.append(f"**{name} - Precio 3:** {price3_display}")
+
+            # Agregar precios alternativos como un solo field organizado
+            if alternative_prices_exist:
+                embed.add_field(
+                    name="Precios Alternativos",
+                    value="\n".join(alternative_fields) if alternative_fields else "No hay precios alternativos",
+                    inline=False
+                )
 
             await interaction.response.send_message(embed=embed)
 
@@ -650,8 +653,8 @@ class Market(commands.Cog):
                 price2 = json.loads(price2_raw) if price2_raw and isinstance(price2_raw, str) else price2_raw or []
                 price3 = json.loads(price3_raw) if price3_raw and isinstance(price3_raw, str) else price3_raw or []
                 initial_price = json.loads(init_raw) if init_raw and isinstance(init_raw, str) else init_raw or []
-                initial_price2 = json.loads(init2_raw) if init2_raw and isinstance(init2_raw, str) else init2_raw or initial_price
-                initial_price3 = json.loads(init3_raw) if init3_raw and isinstance(init3_raw, str) else init3_raw or initial_price
+                initial_price2 = json.loads(init2_raw) if init2_raw and isinstance(init2_raw, str) else init2_raw or []
+                initial_price3 = json.loads(init3_raw) if init3_raw and isinstance(init3_raw, str) else init3_raw or []
 
                 base_stock = int(base_stock or 0)
                 current_stock = int(current_stock or 0)
@@ -663,23 +666,32 @@ class Market(commands.Cog):
                 new_base_stock = random.randint(1, 10)
                 new_current_stock = new_base_stock
 
-                # Función para ajustar un precio
+                # Función para ajustar un precio de forma INDEPENDIENTE
                 def adjust_price(price_list, initial_price_list):
-                    # Si el precio actual es 0 -> restaurar a initial_price
+                    if not price_list:  # Si no hay precio, mantenerlo vacío
+                        return []
+                    
+                    # Si el precio está vacío o es cero, restaurar al inicial
                     if self._is_price_zero(price_list):
-                        return initial_price_list
-
-                    # Calcular factor según ventas
-                    mitad = math.ceil(base_stock / 2) if base_stock > 0 else 1
-                    factor = 1.5 if sold >= mitad else 0.5
+                        return initial_price_list if initial_price_list else []
 
                     new_price = []
                     for e in price_list:
-                        new_qty = max(1, int(e.get("qty", 0) * factor))  # Mínimo 1
+                        current_qty = e.get("qty", 0)
+                        
+                        # CONDICIÓN ESPECIAL: Si el precio es 1 y se vendió la mitad o más
+                        if current_qty == 1 and sold >= math.ceil(base_stock / 2) and base_stock > 0:
+                            new_qty = 2  # Aumentar directamente a 2
+                        else:
+                            # Sistema normal: calcular factor según ventas
+                            mitad = math.ceil(base_stock / 2) if base_stock > 0 else 1
+                            factor = 1.5 if sold >= mitad else 0.5
+                            new_qty = max(1, int(e.get("qty", 0) * factor))
+                        
                         new_price.append({"item_id": e["item_id"], "qty": new_qty})
                     return new_price
 
-                # Ajustar todos los precios
+                # Ajustar CADA precio de forma INDEPENDIENTE
                 new_price = adjust_price(price, initial_price)
                 new_price2 = adjust_price(price2, initial_price2)
                 new_price3 = adjust_price(price3, initial_price3)
@@ -690,7 +702,12 @@ class Market(commands.Cog):
                     SET price = %s::jsonb, price2 = %s::jsonb, price3 = %s::jsonb,
                         base_stock = %s, current_stock = %s
                     WHERE id = %s
-                """, (json.dumps(new_price), json.dumps(new_price2), json.dumps(new_price3), new_base_stock, new_current_stock, listing_id))
+                """, (
+                    json.dumps(new_price) if new_price else '[]',
+                    json.dumps(new_price2) if new_price2 else '[]', 
+                    json.dumps(new_price3) if new_price3 else '[]',
+                    new_base_stock, new_current_stock, listing_id
+                ))
 
                 updated.append(listing_id)
 
