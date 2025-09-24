@@ -521,8 +521,14 @@ class Market(commands.Cog):
 
             ratio = 1.0 + (porcentaje / 100.0)
 
-            # Buscar todos los listings que contengan este item en algún precio
-            cur.execute("SELECT id, price, price2, price3 FROM market_listings")
+            # 🔥 CORRECCIÓN: Filtrar por guild_id del servidor actual
+            cur.execute("""
+                SELECT ml.id, ml.price, ml.price2, ml.price3 
+                FROM market_listings ml
+                JOIN markets m ON ml.market_id = m.id
+                WHERE m.guild_id = %s
+            """, (str(interaction.guild.id),))  # 🎯 Solo mercados de este servidor
+            
             rows = cur.fetchall()
             modified = 0
 
@@ -543,14 +549,15 @@ class Market(commands.Cog):
                         
                         for componente in precio:
                             if componente["item_id"] == item_id:
-                                new_qty = max(0, int(componente["qty"] * ratio))
+                                new_qty = max(1, math.ceil(componente["qty"] * ratio))  # 🎯 Usar ceil para redondear hacia arriba
                                 nuevo_precio.append({"item_id": componente["item_id"], "qty": new_qty})
                                 changed = True
                             else:
                                 nuevo_precio.append(componente)
                         
                         nuevos_precios.append(json.dumps(nuevo_precio))
-                    except:
+                    except Exception as e:
+                        print(f"Error procesando precio: {e}")
                         nuevos_precios.append(precio_json)
 
                 if changed:
@@ -570,12 +577,11 @@ class Market(commands.Cog):
             )
             embed.add_field(name="Listings modificados", value=str(modified), inline=True)
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
         except Exception as e:
             await interaction.response.send_message(f"Error al aplicar inflación: {str(e)}", ephemeral=True)
         finally:
             cur.close()
-
 async def setup(bot: commands.Bot):
     await bot.add_cog(Market(bot))

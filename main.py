@@ -41,6 +41,7 @@ COGS = [
     "cogs.craft",
     "utils.help",
     "cogs.combate",
+    "cogs.custom_commands",
 ]
 
 async def load_cogs():
