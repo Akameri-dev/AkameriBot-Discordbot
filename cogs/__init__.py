@@ -6,3 +6,4 @@ from .item import Items
 from .market import Market
 from .personajes import Personajes
 from .combate import Combate
+from .custom_commands import CustomCommands

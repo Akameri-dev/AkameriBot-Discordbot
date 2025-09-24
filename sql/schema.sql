@@ -248,3 +248,20 @@ ALTER TABLE market_listings
   ADD COLUMN IF NOT EXISTS initial_price2 JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS price3 JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS initial_price3 JSONB DEFAULT '[]'::jsonb;
+
+
+-- =============================
+-- COMANDOS PERSONALIZADOS
+-- =============================
+CREATE TABLE IF NOT EXISTS custom_commands (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,              -- Servidor
+    name TEXT NOT NULL,                  -- Nombre del comando (sin punto)
+    description TEXT,                    -- Descripción
+    main_action JSONB NOT NULL,          -- Acción principal: {"type": "tipo", "params": "parametros"}
+    requirements JSONB DEFAULT '[]'::jsonb, -- Requisitos: [{"type": "tipo", "value": "valor"}, ...]
+    response_message TEXT,               -- Mensaje de respuesta adicional
+    created_by TEXT,                     -- ID del creador
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (guild_id, name)
+);
