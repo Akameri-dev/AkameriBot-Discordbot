@@ -59,7 +59,6 @@ class Help(commands.Cog):
             name="📦 SISTEMA DE INVENTARIO",
             value="""`/inventario ver` - Ver inventario en formato tabla
 `/inventario transferir` - Transferir items entre personajes
-`/inventario tirar` - Eliminar items del inventario
 `/inventario usar` - Usar items con durabilidad
 `/inventario give` - Dar items mágicamente (admin)
 `/inventario limite` - Establecer límite de inventario (admin)
@@ -97,12 +96,13 @@ class Help(commands.Cog):
 `/mercado remove_item` - Quitar item (admin)
 `/mercado comprar` - Comprar items
 `/mercado inflacion` - Aplicar inflación (admin)
+`/mercado actualizar`- Aplicar Actualizacion (admin)
 
 **Características:**
 - Hasta 3 precios diferentes por item
 - Sistema de stock dinámico
 - Inflación aplicable a items específicos
-- Interfaz tipo tabla profesional""",
+- Sistema de Tasacion por Compra""",
             inline=False
         )
 

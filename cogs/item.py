@@ -100,37 +100,73 @@ class Items(commands.Cog):
     ):
         cur = self.conn.cursor()
         try:
+            # Primero verificamos si el item ya existe
+            cur.execute("SELECT id FROM items WHERE name = %s", (nombre,))
+            existing_item = cur.fetchone()
+            
             efectos_json = self._parse_json_field(efectos) or {}
-            
-            # Convertir equipable a booleano
             equipable_bool = equipable.lower() in ['sí', 'si', 's', 'yes', 'y', 'true', '1']
-            
             craft_json = await self._parse_receta_field(craft, cur) or []
             decompose_json = await self._parse_receta_field(decompose, cur) or []
 
-            cur.execute("""
-                INSERT INTO items (name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose)
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
-                RETURNING id
-            """, (
-                nombre, 
-                categoria, 
-                descripcion, 
-                imagen,
-                json.dumps(efectos_json), 
-                max_usos,
-                equipable_bool,
-                ataque,
-                defensa,
-                json.dumps(craft_json), 
-                json.dumps(decompose_json)
-            ))
+            if existing_item:
+                # ACTUALIZAR ITEM EXISTENTE
+                item_id = existing_item[0]
+                cur.execute("""
+                    UPDATE items 
+                    SET category = %s, 
+                        description = %s, 
+                        image = %s, 
+                        effects = %s::jsonb, 
+                        max_uses = %s, 
+                        equipable = %s, 
+                        attack = %s, 
+                        defense = %s, 
+                        craft = %s::jsonb, 
+                        decompose = %s::jsonb
+                    WHERE id = %s
+                """, (
+                    categoria, 
+                    descripcion, 
+                    imagen,
+                    json.dumps(efectos_json), 
+                    max_usos,
+                    equipable_bool,
+                    ataque,
+                    defensa,
+                    json.dumps(craft_json), 
+                    json.dumps(decompose_json),
+                    item_id
+                ))
+                
+                action_message = f"Item **{nombre}** actualizado con éxito (ID: {item_id})."
+            else:
+                # CREAR NUEVO ITEM
+                cur.execute("""
+                    INSERT INTO items (name, category, description, image, effects, max_uses, equipable, attack, defense, craft, decompose)
+                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                    RETURNING id
+                """, (
+                    nombre, 
+                    categoria, 
+                    descripcion, 
+                    imagen,
+                    json.dumps(efectos_json), 
+                    max_usos,
+                    equipable_bool,
+                    ataque,
+                    defensa,
+                    json.dumps(craft_json), 
+                    json.dumps(decompose_json)
+                ))
+                
+                item_id = cur.fetchone()[0]
+                action_message = f"Item **{nombre}** creado con éxito (ID: {item_id})."
             
-            item_id = cur.fetchone()[0]
             self.conn.commit()
             
             await interaction.response.send_message(
-                f"Item **{nombre}** creado con éxito (ID: {item_id}).\n"
+                f"{action_message}\n"
                 f"Equipable: {'Sí' if equipable_bool else 'No'}\n"
                 f"Usos máximos: {max_usos if max_usos > 0 else 'Ilimitados'}\n"
                 f"Ataque: {ataque or 'No'}\n"
@@ -139,8 +175,9 @@ class Items(commands.Cog):
                 f"Decompose: {len(decompose_json)} componentes", 
                 ephemeral=True
             )
+            
         except Exception as e:
-            await interaction.response.send_message(f"No se pudo crear el ítem: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"No se pudo crear/actualizar el ítem: {str(e)}", ephemeral=True)
         finally:
             cur.close()
 
