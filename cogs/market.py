@@ -505,35 +505,28 @@ class Market(commands.Cog):
         finally:
             cur.close()
 
-    @mercado.command(name="inflacion", description="Aplica inflación a un item en todos los mercados (solo admins)")
+    @mercado.command(name="inflacion", description="Aplica inflación a TODOS los items en todos los mercados (solo admins)")
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(
-        item_nombre="Nombre del item afectado por la inflación",
         porcentaje="Porcentaje de inflación (puede ser negativo)"
     )
-    async def inflacion(self, interaction: discord.Interaction, item_nombre: str, porcentaje: float):
+    async def inflacion(self, interaction: discord.Interaction, porcentaje: float):
         cur = self.conn.cursor()
         try:
-            item_id = self._item_id_by_name(cur, item_nombre)
-            if not item_id:
-                await interaction.response.send_message("Item no encontrado.", ephemeral=True)
-                return
-
             ratio = 1.0 + (porcentaje / 100.0)
 
-            # 🔥 CORRECCIÓN: Filtrar por guild_id del servidor actual
+            # Obtener todos los listings del servidor
             cur.execute("""
                 SELECT ml.id, ml.price, ml.price2, ml.price3 
                 FROM market_listings ml
                 JOIN markets m ON ml.market_id = m.id
                 WHERE m.guild_id = %s
-            """, (str(interaction.guild.id),))  # 🎯 Solo mercados de este servidor
+            """, (str(interaction.guild.id),))
             
             rows = cur.fetchall()
             modified = 0
 
             for listing_id, price1, price2, price3 in rows:
-                # Procesar cada precio
                 precios = [price1, price2, price3]
                 nuevos_precios = []
                 changed = False
@@ -548,12 +541,10 @@ class Market(commands.Cog):
                         nuevo_precio = []
                         
                         for componente in precio:
-                            if componente["item_id"] == item_id:
-                                new_qty = max(1, math.ceil(componente["qty"] * ratio))  # 🎯 Usar ceil para redondear hacia arriba
-                                nuevo_precio.append({"item_id": componente["item_id"], "qty": new_qty})
-                                changed = True
-                            else:
-                                nuevo_precio.append(componente)
+                            # Aplicar inflación a CADA componente del precio
+                            new_qty = max(1, math.ceil(componente["qty"] * ratio))
+                            nuevo_precio.append({"item_id": componente["item_id"], "qty": new_qty})
+                            changed = True
                         
                         nuevos_precios.append(json.dumps(nuevo_precio))
                     except Exception as e:
@@ -572,7 +563,7 @@ class Market(commands.Cog):
             
             embed = discord.Embed(
                 title="Inflación Aplicada",
-                description=f"Se aplicó {porcentaje}% de inflación al item **{item_nombre}**.",
+                description=f"Se aplicó {porcentaje}% de inflación a TODOS los items en todos los precios del mercado.",
                 color=discord.Color.dark_gold()
             )
             embed.add_field(name="Listings modificados", value=str(modified), inline=True)
@@ -583,5 +574,49 @@ class Market(commands.Cog):
             await interaction.response.send_message(f"Error al aplicar inflación: {str(e)}", ephemeral=True)
         finally:
             cur.close()
+
+    @mercado.command(name="reiniciar_inflacion", description="Reinicia TODOS los precios a los valores iniciales (solo admins)")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def reiniciar_inflacion(self, interaction: discord.Interaction):
+        cur = self.conn.cursor()
+        try:
+            # Obtener todos los listings del servidor para contar cuántos se van a modificar
+            cur.execute("""
+                SELECT COUNT(*) 
+                FROM market_listings ml
+                JOIN markets m ON ml.market_id = m.id
+                WHERE m.guild_id = %s
+            """, (str(interaction.guild.id),))
+            
+            total_listings = cur.fetchone()[0]
+
+            # Reiniciar todos los precios a sus valores iniciales
+            cur.execute("""
+                UPDATE market_listings 
+                SET price = initial_price, 
+                    price2 = initial_price2, 
+                    price3 = initial_price3
+                FROM markets
+                WHERE market_listings.market_id = markets.id 
+                AND markets.guild_id = %s
+            """, (str(interaction.guild.id),))
+            
+            modified = cur.rowcount
+            self.conn.commit()
+            
+            embed = discord.Embed(
+                title="Inflación Reiniciada",
+                description="Todos los precios han sido restablecidos a sus valores iniciales.",
+                color=discord.Color.dark_gold()
+            )
+            embed.add_field(name="Listings modificados", value=f"{modified}/{total_listings}", inline=True)
+            
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            await interaction.response.send_message(f"Error al reiniciar la inflación: {str(e)}", ephemeral=True)
+        finally:
+            cur.close()
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Market(bot))
