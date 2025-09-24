@@ -256,18 +256,24 @@ class CustomCommands(commands.Cog):
             )
             
             for name, description, main_action, requirements in comandos:
-                # Parsear acción principal
-                accion = json.loads(main_action) if isinstance(main_action, str) else main_action
-                accion_str = f"{accion['type']}@{accion['params']}"
+                # Parsear correctamente el JSON
+                try:
+                    if isinstance(main_action, str):
+                        accion = json.loads(main_action)
+                    else:
+                        accion = main_action
+                    accion_str = f"{accion['type']}@{accion['params']}"
+                except:
+                    accion_str = "Error parsing action"
                 
-                # Parsear requisitos
-                reqs = json.loads(requirements) if requirements else []
-                requisitos_str = ""
-                for req in reqs:
-                    requisitos_str += f"- {req['type']}: {req['value']}\n"
-                
-                if not requisitos_str:
-                    requisitos_str = "Sin requisitos"
+                try:
+                    if isinstance(requirements, str):
+                        reqs = json.loads(requirements)
+                    else:
+                        reqs = requirements or []
+                    requisitos_str = "\n".join([f"- {req['type']}: {req['value']}" for req in reqs]) if reqs else "Sin requisitos"
+                except:
+                    requisitos_str = "Error parsing requirements"
                 
                 embed.add_field(
                     name=f".{name}",
@@ -307,19 +313,28 @@ class CustomCommands(commands.Cog):
             
             embed.add_field(name="Descripción", value=description, inline=False)
             
-            # Parsear acción principal
-            accion = json.loads(main_action) if isinstance(main_action, str) else main_action
-            embed.add_field(name="Acción Principal", value=f"`{accion['type']}@{accion['params']}`", inline=False)
+            # Parsear correctamente el JSON
+            try:
+                if isinstance(main_action, str):
+                    accion = json.loads(main_action)
+                else:
+                    accion = main_action
+                embed.add_field(name="Acción Principal", value=f"`{accion['type']}@{accion['params']}`", inline=False)
+            except:
+                embed.add_field(name="Acción Principal", value="Error parsing action", inline=False)
             
-            # Parsear requisitos
-            reqs = json.loads(requirements) if requirements else []
-            if reqs:
-                requisitos_str = ""
-                for req in reqs:
-                    requisitos_str += f"- **{req['type']}:** {req['value']}\n"
-                embed.add_field(name="Requisitos", value=requisitos_str, inline=False)
-            else:
-                embed.add_field(name="Requisitos", value="Ninguno", inline=False)
+            try:
+                if isinstance(requirements, str):
+                    reqs = json.loads(requirements)
+                else:
+                    reqs = requirements or []
+                if reqs:
+                    requisitos_str = "\n".join([f"- **{req['type']}:** {req['value']}" for req in reqs])
+                    embed.add_field(name="Requisitos", value=requisitos_str, inline=False)
+                else:
+                    embed.add_field(name="Requisitos", value="Ninguno", inline=False)
+            except:
+                embed.add_field(name="Requisitos", value="Error parsing requirements", inline=False)
             
             if response_message:
                 embed.add_field(name="Mensaje Adicional", value=response_message, inline=False)
@@ -337,66 +352,6 @@ class CustomCommands(commands.Cog):
             
         except Exception as e:
             await interaction.response.send_message(f"Error: {str(e)}", ephemeral=True)
-        finally:
-            cur.close()
-
-    # Manejador de mensajes para comandos personalizados
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot or not message.content.startswith('.'):
-            return
-        
-        if not message.guild:
-            return
-        
-        command_name = message.content[1:].split()[0].lower()
-        
-        cur = self.conn.cursor()
-        try:
-            cur.execute("""
-                SELECT main_action, requirements, response_message
-                FROM custom_commands 
-                WHERE guild_id=%s AND name=%s
-            """, (str(message.guild.id), command_name))
-            
-            comando = cur.fetchone()
-            
-            if not comando:
-                return
-            
-            main_action, requirements, response_message = comando
-            
-            # Parsear JSON
-            accion = json.loads(main_action) if isinstance(main_action, str) else main_action
-            requisitos = json.loads(requirements) if requirements else []
-            
-            # Verificar requisitos
-            for req in requisitos:
-                if not self._check_requirement(req['type'], req['value'], message.author, str(message.guild.id)):
-                    await message.channel.send(
-                        f"{message.author.mention} No cumples los requisitos para usar este comando.",
-                        delete_after=10
-                    )
-                    return
-            
-            # Ejecutar la acción principal
-            resultado = self._execute_action(accion['type'], accion['params'], message)
-            
-            # Enviar respuesta
-            if isinstance(resultado, str):
-                response_text = resultado
-                if response_message:
-                    response_text += f"\n\n{response_message}"
-                await message.channel.send(response_text)
-            elif isinstance(resultado, discord.Embed):
-                if response_message:
-                    resultado.description = f"{resultado.description}\n\n{response_message}" if resultado.description else response_message
-                await message.channel.send(embed=resultado)
-            else:
-                await message.channel.send("Error al ejecutar el comando.")
-                
-        except Exception as e:
-            print(f"Error en comando personalizado: {e}")
         finally:
             cur.close()
 

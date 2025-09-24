@@ -13,6 +13,43 @@ class Personajes(commands.Cog):
 
     personaje = app_commands.Group(name="personaje", description="Gestión de personajes")
 
+    @personaje.command(name="registrar", description="Crea tu personaje en este servidor")
+    @app_commands.describe(
+        nombre="Nombre del personaje",
+        genero="Género del personaje",
+        edad="Edad del personaje",
+        imagen="URL de imagen para el personaje (opcional)",
+        historia="Historia del personaje (opcional)",
+        rasgos="Rasgos del personaje separados por comas (opcional)"
+    )
+    async def crear_personaje(self, interaction: discord.Interaction, nombre: str, genero: str = None, edad: int = None, 
+                             imagen: str = None, historia: str = None, rasgos: str = None):
+        cur = self.conn.cursor()
+        try:
+            # Verificar si el personaje ya existe
+            cur.execute("SELECT id FROM characters WHERE guild_id=%s AND name=%s", (str(interaction.guild.id), nombre))
+            if cur.fetchone():
+                await interaction.response.send_message("Ya existe un personaje con ese nombre en este servidor.", ephemeral=True)
+                return
+
+            # Convertir rasgos a lista JSON
+            rasgos_lista = []
+            if rasgos:
+                rasgos_lista = [r.strip() for r in rasgos.split(",") if r.strip()]
+
+            # Insertar el personaje
+            cur.execute("""
+                INSERT INTO characters (user_id, guild_id, name, gender, age, image, lore, traits, attributes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+            """, (str(interaction.user.id), str(interaction.guild.id), nombre, genero, edad, imagen, historia, json.dumps(rasgos_lista)))
+            self.conn.commit()
+
+            await interaction.response.send_message(f"Personaje **{nombre}** creado con éxito.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"No se pudo crear el personaje: {str(e)}", ephemeral=True)
+        finally:
+            cur.close()
+
     @personaje.command(name="ver", description="Muestra la ficha de un personaje")
     async def ver_personaje(self, interaction: discord.Interaction, nombre: str):
         cur = self.conn.cursor()

@@ -618,5 +618,106 @@ class Market(commands.Cog):
         finally:
             cur.close()
 
+    @mercado.command(name="actualizar", description="(Admin) Actualiza stocks aleatorios y ajusta precios según ventas")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def actualizar_mercado(self, interaction: discord.Interaction, mercado_nombre: str):
+        cur = self.conn.cursor()
+        try:
+            # Obtener el mercado
+            cur.execute("SELECT id FROM markets WHERE guild_id=%s AND lower(name)=lower(%s)", (str(interaction.guild.id), mercado_nombre))
+            mk = cur.fetchone()
+            if not mk:
+                await interaction.response.send_message("No encontré ese mercado.", ephemeral=True)
+                return
+            market_id = mk[0]
+
+            # Obtener los listados del mercado
+            cur.execute("""
+                SELECT id, price, price2, price3, initial_price, initial_price2, initial_price3, base_stock, current_stock
+                FROM market_listings
+                WHERE market_id=%s
+            """, (market_id,))
+            rows = cur.fetchall()
+            if not rows:
+                await interaction.response.send_message("Ese mercado no tiene items.", ephemeral=True)
+                return
+
+            updated = []
+
+            for (listing_id, price_raw, price2_raw, price3_raw, init_raw, init2_raw, init3_raw, base_stock, current_stock) in rows:
+                # Parsear los precios
+                price = json.loads(price_raw) if price_raw and isinstance(price_raw, str) else price_raw or []
+                price2 = json.loads(price2_raw) if price2_raw and isinstance(price2_raw, str) else price2_raw or []
+                price3 = json.loads(price3_raw) if price3_raw and isinstance(price3_raw, str) else price3_raw or []
+                initial_price = json.loads(init_raw) if init_raw and isinstance(init_raw, str) else init_raw or []
+                initial_price2 = json.loads(init2_raw) if init2_raw and isinstance(init2_raw, str) else init2_raw or initial_price
+                initial_price3 = json.loads(init3_raw) if init3_raw and isinstance(init3_raw, str) else init3_raw or initial_price
+
+                base_stock = int(base_stock or 0)
+                current_stock = int(current_stock or 0)
+
+                # Calcular vendidos
+                sold = base_stock - current_stock
+
+                # Nuevo stock aleatorio
+                new_base_stock = random.randint(1, 10)
+                new_current_stock = new_base_stock
+
+                # Función para ajustar un precio
+                def adjust_price(price_list, initial_price_list):
+                    # Si el precio actual es 0 -> restaurar a initial_price
+                    if self._is_price_zero(price_list):
+                        return initial_price_list
+
+                    # Calcular factor según ventas
+                    mitad = math.ceil(base_stock / 2) if base_stock > 0 else 1
+                    factor = 1.5 if sold >= mitad else 0.5
+
+                    new_price = []
+                    for e in price_list:
+                        new_qty = max(1, int(e.get("qty", 0) * factor))  # Mínimo 1
+                        new_price.append({"item_id": e["item_id"], "qty": new_qty})
+                    return new_price
+
+                # Ajustar todos los precios
+                new_price = adjust_price(price, initial_price)
+                new_price2 = adjust_price(price2, initial_price2)
+                new_price3 = adjust_price(price3, initial_price3)
+
+                # Actualizar el listing
+                cur.execute("""
+                    UPDATE market_listings
+                    SET price = %s::jsonb, price2 = %s::jsonb, price3 = %s::jsonb,
+                        base_stock = %s, current_stock = %s
+                    WHERE id = %s
+                """, (json.dumps(new_price), json.dumps(new_price2), json.dumps(new_price3), new_base_stock, new_current_stock, listing_id))
+
+                updated.append(listing_id)
+
+            self.conn.commit()
+
+            embed = discord.Embed(
+                title="Mercado Actualizado",
+                description=f"El mercado **{mercado_nombre}** ha sido actualizado.",
+                color=discord.Color.dark_gold()
+            )
+            embed.add_field(name="Listados actualizados", value=str(len(updated)), inline=True)
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            await interaction.response.send_message(f"Error al actualizar el mercado: {str(e)}", ephemeral=True)
+        finally:
+            cur.close()
+
+    def _is_price_zero(self, price_list):
+        """Verifica si el precio es cero (no se puede comprar)"""
+        if not price_list:
+            return True
+        for comp in price_list:
+            if comp.get('qty', 0) > 0:
+                return False
+        return True
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Market(bot))
+
